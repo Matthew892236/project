@@ -53,7 +53,7 @@ export default function Overview() {
     setSending(true);
     setComposeOpen(false);
     
-    const { data, error } = await supabase.functions.invoke('send-concert-emails', {
+const { error } = await supabase.functions.invoke('send-concert-emails', {
       body: { 
         player_ids: targetPlayerIds, // 🌟 FIXED: Now the mailroom knows who to send it to!
         general: true, 
