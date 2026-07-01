@@ -1,0 +1,3 @@
+REVOKE EXECUTE ON FUNCTION seed_new_band() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION seed_new_band() FROM anon;
+REVOKE EXECUTE ON FUNCTION seed_new_band() FROM authenticated;
