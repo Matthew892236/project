@@ -14,21 +14,27 @@ Deno.serve(async (req) => {
   );
 
   try {
+    // ----------------------------------------------------
+    // 1. SPARE PLAYER ACTIONS (The Cascade System)
+    // ----------------------------------------------------
     if (action === 'accept') {
       await supabase
         .from('availability')
-        .update({ status: 'Green' })
+        .update({ 
+          status: 'Spare Assigned', // Matches your React Matrix!
+          spare_player_id: spareId  // Saves who accepted the gig!
+        }) 
         .match({ player_id: playerId, concert_id: concertId });
 
-      // 🌟 UPDATED: Sends them to your site with a success flag
-      return Response.redirect("https://brassbandwidth.com?status=accepted", 302);
+      return Response.redirect("https://brassbandwidth.netlify.app?status=accepted", 302);
 
     } else if (action === 'decline') {
+      // Uses maybeSingle() so it never crashes!
       const { data } = await supabase
         .from('availability')
         .select('current_approach_index')
         .match({ player_id: playerId, concert_id: concertId })
-        .single();
+        .maybeSingle();
         
       const nextIndex = (data?.current_approach_index || 0) + 1;
       
@@ -37,8 +43,28 @@ Deno.serve(async (req) => {
         .update({ current_approach_index: nextIndex, approach_initiated_at: new Date().toISOString() })
         .match({ player_id: playerId, concert_id: concertId });
 
-      // 🌟 UPDATED: Sends them to your site with a declined flag
-      return Response.redirect("https://brassbandwidth.com?status=declined", 302);
+      // Uses the working Netlify link!
+      return Response.redirect("https://brassbandwidth.netlify.app?status=declined", 302);
+    }
+
+    // ----------------------------------------------------
+    // 2. CORE PLAYER ACTIONS (The Roster Page Emails)
+    // ----------------------------------------------------
+    else if (action === 'core-accept') {
+      await supabase
+        .from('availability')
+        .update({ status: 'Available' })
+        .match({ player_id: playerId, concert_id: concertId });
+
+      return Response.redirect("https://brassbandwidth.netlify.app?status=available", 302);
+
+    } else if (action === 'core-decline') {
+      await supabase
+        .from('availability')
+        .update({ status: 'Not Available' })
+        .match({ player_id: playerId, concert_id: concertId });
+
+      return Response.redirect("https://brassbandwidth.netlify.app?status=declined", 302);
     }
 
     return new Response("Invalid action.", { status: 400 });

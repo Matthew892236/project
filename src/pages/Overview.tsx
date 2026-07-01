@@ -39,16 +39,35 @@ export default function Overview() {
 
   async function sendBandEmail(e: React.FormEvent) {
     e.preventDefault();
+    
+    // 🌟 Gather the IDs of all active players who actually have an email address
+    const targetPlayerIds = activePlayers
+      .filter((p) => p.email)
+      .map((p) => p.id);
+
+    if (targetPlayerIds.length === 0) {
+      showToast("No active players have email addresses!");
+      return;
+    }
+
     setSending(true);
     setComposeOpen(false);
+    
     const { data, error } = await supabase.functions.invoke('send-concert-emails', {
-      body: { general: true, subject: emailSubject, message: emailMessage },
+      body: { 
+        player_ids: targetPlayerIds, // 🌟 FIXED: Now the mailroom knows who to send it to!
+        general: true, 
+        subject: emailSubject, 
+        message: emailMessage 
+      },
     });
+    
     setSending(false);
+    
     if (error) {
       showToast('Error sending emails');
     } else {
-      showToast(`Emails sent to ${(data as { sent?: number })?.sent ?? 0} players`);
+      showToast(`Emails successfully sent to ${targetPlayerIds.length} players!`);
     }
   }
 

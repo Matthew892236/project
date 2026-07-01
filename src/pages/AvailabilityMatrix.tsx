@@ -73,7 +73,9 @@ function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
 function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
   if (status === 'Available') return <span className="cell-label cell-available">{playerName}</span>;
   if (status === 'Not Available') return <span className="cell-label cell-not-available">✕</span>;
-  if (status === 'Spare Assigned' && spareName) return <span className="cell-label cell-spare">{spareName}</span>;
+  
+  // 🌟 FIXED: Added a fallback so it never breaks!
+  if (status === 'Spare Assigned') return <span className="cell-label cell-spare">{spareName || 'Covered by Dep'}</span>; 
   
   if ((status as string) === 'Spares Contacted' && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;

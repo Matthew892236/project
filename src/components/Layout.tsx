@@ -10,7 +10,7 @@ const navItems = [
   { to: '/roster', label: 'Band Roster', icon: Users },
   { to: '/availability', label: 'Availability Matrix', icon: Grid3X3 },
   // 🌟 Added your new geographic search page here:
-  { to: '/search-spares', label: 'Find Spares Matrix', icon: Search },
+
 ];
 
 export default function Layout() {

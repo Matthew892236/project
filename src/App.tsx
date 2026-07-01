@@ -11,7 +11,7 @@ import ConcertDirectory from './pages/ConcertDirectory';
 import BandRoster from './pages/BandRoster';
 import AvailabilityMatrix from './pages/AvailabilityMatrix';
 import BandOnboarding from './pages/BandOnboarding';
-import SpareSearch from './pages/SpareSearch';
+
 
 // 🌟 Zero-Dependency Notification Pop-up
 function ResponseNotification() {
@@ -21,7 +21,8 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    if (currentStatus === 'accepted' || currentStatus === 'declined') {
+    // 🌟 ADDED: Now catches 'available' (core players) and 'joined-network' (global spares)
+    if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network') {
       setStatus(currentStatus);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -52,30 +53,27 @@ function ResponseNotification() {
         border: '1px solid #e2e8f0',
         fontFamily: 'sans-serif'
       }}>
-        {/* Close Button */}
         <button 
           onClick={() => setStatus(null)}
-          style={{ 
-            position: 'absolute', 
-            top: '16px', 
-            right: '16px', 
-            background: 'none', 
-            border: 'none', 
-            cursor: 'pointer', 
-            color: '#94a3b8',
-            fontSize: '20px',
-            lineHeight: 1
-          }}
+          style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '20px' }}
         >
           ✕
         </button>
 
-        {status === 'accepted' ? (
+        {status === 'joined-network' ? (
+          <>
+            <div style={{ fontSize: '56px', marginBottom: '16px' }}>🌍</div>
+            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Welcome to the Network!</h2>
+            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
+              You are officially on the Global Spares Network! Band Managers nearby will now be able to find and contact you when they need a dep for your instrument.
+            </p>
+          </>
+        ) : status === 'accepted' || status === 'available' ? (
           <>
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>✅</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Gig Confirmed!</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              Fantastic! Your availability status has been updated to Green. The Band Manager's matrix has been updated. Thank you for depping!
+              Fantastic! Your availability status has been updated to Green. The Band Manager's matrix has been updated. Thank you!
             </p>
           </>
         ) : (
@@ -148,17 +146,28 @@ function App() {
     checkBandProfile();
   }, [session]);
 
-  // Route routing capture
-  let mainContent;
+  // 🌟 Public routes — return wrappers matching your original layout exactly
+// 🌟 Public routes — Normalized to strip trailing slashes so email clients don't break them!
+  const cleanPath = window.location.pathname.replace(/\/$/, '');
 
-  if (window.location.pathname === '/respond') mainContent = <Respond />;
-  else if (window.location.pathname === '/band-view') mainContent = <BandView />;
-  else if (window.location.pathname === '/matrix') mainContent = <AvailabilityMatrix />;
-  else if (session === undefined || (session && hasBand === null)) mainContent = null;
-  else if (!session) mainContent = <Login />;
-  else if (session && !hasBand) mainContent = <BandOnboarding onComplete={() => setHasBand(true)} />;
-  else {
-    mainContent = (
+  if (cleanPath === '/respond') return <><Respond /><ResponseNotification /></>;
+  if (cleanPath === '/band-view') return <><BandView /><ResponseNotification /></>;
+  if (cleanPath === '/matrix') return <><AvailabilityMatrix /><ResponseNotification /></>;
+
+  // Loading states
+  if (session === undefined || (session && hasBand === null)) return null;
+  
+  // Gate 1: If not logged in, go to Login
+  if (!session) return <><Login /><ResponseNotification /></>;
+
+  // Gate 2: If logged in but hasn't set up a band location yet, force onboarding
+  if (session && !hasBand) {
+    return <><BandOnboarding onComplete={() => setHasBand(true)} /><ResponseNotification /></>;
+  }
+
+  // Gate 3: Logged in and band exists. Open up the dashboard!
+  return (
+    <>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
@@ -166,16 +175,10 @@ function App() {
             <Route path="concerts" element={<ConcertDirectory />} />
             <Route path="roster" element={<BandRoster />} />
             <Route path="availability" element={<AvailabilityMatrix />} />
-            <Route path="/search-spares" element={<SpareSearch />} />
+
           </Route>
         </Routes>
       </BrowserRouter>
-    );
-  }
-
-  return (
-    <>
-      {mainContent}
       <ResponseNotification />
     </>
   );
