@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 // 🌟 Added the "Search" icon to the imports row below:
-import { LayoutDashboard, CalendarDays, Users, Grid3X3, Music, LogOut, Mail, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Mail, } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const navItems = [
