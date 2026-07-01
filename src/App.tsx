@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
-import { CheckCircle, XCircle, X } from 'lucide-react'; // 🌟 Added notification icons
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Respond from './pages/Respond';
@@ -14,19 +13,16 @@ import AvailabilityMatrix from './pages/AvailabilityMatrix';
 import BandOnboarding from './pages/BandOnboarding';
 import SpareSearch from './pages/SpareSearch';
 
-// 🌟 NEW: Global URL Listener and Pop-up Component
+// 🌟 Zero-Dependency Notification Pop-up
 function ResponseNotification() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    // Look at the web browser's URL bar for "?status="
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
     if (currentStatus === 'accepted' || currentStatus === 'declined') {
       setStatus(currentStatus);
-      
-      // Clean up the URL bar so it looks nice and tidy again without reloading
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -56,25 +52,36 @@ function ResponseNotification() {
         border: '1px solid #e2e8f0',
         fontFamily: 'sans-serif'
       }}>
+        {/* Close Button */}
         <button 
           onClick={() => setStatus(null)}
-          style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+          style={{ 
+            position: 'absolute', 
+            top: '16px', 
+            right: '16px', 
+            background: 'none', 
+            border: 'none', 
+            cursor: 'pointer', 
+            color: '#94a3b8',
+            fontSize: '20px',
+            lineHeight: 1
+          }}
         >
-          <X size={20} />
+          ✕
         </button>
 
         {status === 'accepted' ? (
           <>
-            <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Gig Confirmed! ✅</h2>
+            <div style={{ fontSize: '56px', marginBottom: '16px' }}>✅</div>
+            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Gig Confirmed!</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
               Fantastic! Your availability status has been updated to Green. The Band Manager's matrix has been updated. Thank you for depping!
             </p>
           </>
         ) : (
           <>
-            <XCircle size={56} color="#dc2626" style={{ margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Response Recorded ✕</h2>
+            <div style={{ fontSize: '56px', marginBottom: '16px' }}>❌</div>
+            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Response Recorded</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
               No worries at all! Your response has been logged so the manager can automatically check the next player on the list. Thanks for letting us know quickly!
             </p>
@@ -92,7 +99,8 @@ function ResponseNotification() {
             borderRadius: '8px',
             border: 'none',
             cursor: 'pointer',
-            width: '100%'
+            width: '100%',
+            fontSize: '15px'
           }}
         >
           Got it, thanks!
@@ -118,7 +126,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Check if the logged-in manager already has a band registered
   useEffect(() => {
     async function checkBandProfile() {
       if (session?.user) {
@@ -141,7 +148,7 @@ function App() {
     checkBandProfile();
   }, [session]);
 
-  // 🌟 REFACTORED RETURNS: We capture the view in a variable so we can safely wrap it with the notification modal!
+  // Route routing capture
   let mainContent;
 
   if (window.location.pathname === '/respond') mainContent = <Respond />;
@@ -166,7 +173,6 @@ function App() {
     );
   }
 
-  // Final render wraps everything globally
   return (
     <>
       {mainContent}
@@ -174,6 +180,5 @@ function App() {
     </>
   );
 }
-
 
 export default App;
