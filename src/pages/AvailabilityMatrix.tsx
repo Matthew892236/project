@@ -6,9 +6,9 @@ import {
   KeyboardSensor,
   PointerSensor,
   useSensor,
-  useSensors,
+  useSensors
 } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core'; 
 import {
   arrayMove,
   SortableContext,
@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, UserPlus, ChevronDown, Send, Clock, Users, Globe, Search, AlertCircle } from 'lucide-react';
+import { GripVertical, UserPlus, ChevronDown, Send, Clock, Users, Globe, Search, AlertCircle, Grid3X3, X } from 'lucide-react';
 import { supabase, fetchAllInstruments } from '../lib/supabase';
 import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
 
@@ -35,27 +35,26 @@ type AvailabilityCell = Availability & {
 };
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3958.8; // Radius of Earth in miles
+  const R = 3958.8; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-      
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
-function getCellBg(status: AvailabilityStatus) {
-  if (status === 'Available') return 'cell-bg-available';
-  if (status === 'Not Available') return 'cell-bg-not-available';
-  if (status === 'Spare Assigned') return 'cell-bg-spare';
-  if (status === 'Spares Contacted' as any) return 'cell-bg-contacted';
-  return 'cell-bg-not-responded';
+// 🌟 UNIFIED DESIGN SYSTEM CELL BACKGROUND COLORS
+function getCellStyle(status: AvailabilityStatus) {
+  if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
+  if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
+  if (status === 'Spare Assigned') return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
+  if ((status as string) === 'Spares Contacted') return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
+  return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
 }
 
 function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
@@ -71,21 +70,19 @@ function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
 }
 
 function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
-  if (status === 'Available') return <span className="cell-label cell-available">{playerName}</span>;
-  if (status === 'Not Available') return <span className="cell-label cell-not-available">✕</span>;
-  
-  if (status === 'Spare Assigned') return <span className="cell-label cell-spare">{spareName || 'Covered by Dep'}</span>; 
-  
+  if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
+  if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
+  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || 'Covered by Dep'}</span>; 
   if ((status as string) === 'Spares Contacted' && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;
     const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
     return (
-      <span className="cell-label cell-contacted" style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 600 }}>
+      <span style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 700 }}>
         Asked: {currentActivePlayer.name.split(' ')[0]} ({activeIdx + 1}/{approachedList.length})
       </span>
     );
   }
-  return <span className="cell-label cell-not-responded">Not Responded</span>;
+  return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '13px' }}>No Response</span>;
 }
 
 type PortalDropdownProps = {
@@ -116,17 +113,9 @@ function PortalDropdown({ anchorRect, onClose, children }: PortalDropdownProps) 
     <div
       ref={dropdownRef}
       style={{
-        position: 'fixed',
-        top,
-        left,
-        width: DROPDOWN_WIDTH,
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
-        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
-        zIndex: 9999,
-        overflow: 'hidden',
-        fontFamily: 'system-ui'
+        position: 'fixed', top, left, width: DROPDOWN_WIDTH, background: '#fff',
+        border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+        zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui'
       }}
     >
       {children}
@@ -170,12 +159,12 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
 
   return (
     <tr ref={setNodeRef} style={{ ...rowStyle, borderBottom: '1px solid #f1f5f9' }}>
-      <td style={{ padding: '12px 16px', background: '#fff' }}>
-        <span {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1' }}>
+      <td style={{ padding: '12px 16px', background: '#fff', width: '40px' }}>
+        <span {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex' }}>
           <GripVertical size={16} />
         </span>
       </td>
-      <td style={{ padding: '12px 16px', background: '#fff', fontWeight: 500, color: '#0f172a', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>
+      <td style={{ padding: '12px 16px', background: '#fff', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>
         {player.name}
       </td>
       {concerts.map((concert) => {
@@ -190,6 +179,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
         const cellId = `${player.id}-${concert.id}`;
         const isActive = activeDropdown === cellId;
         const targetInstrument = player.instrument.toLowerCase().trim();
+        const configColors = getCellStyle(status);
 
         const busySpareIdsForConcert = (() => {
           const otherSeatsForThisConcert = allAvailability.filter((a) => a.concert_id === concert.id && a.player_id !== player.id);
@@ -203,12 +193,10 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
           return busyIds;
         })();
 
-        // 🌟 SECURE ISOLATION: Local Spares come from YOUR band only
         const localSparesList = allPlayers
           .filter((p) => p.instrument.toLowerCase().trim() === targetInstrument && p.status === 'Spare' && !busySpareIdsForConcert.has(p.id))
           .map((p) => ({ id: p.id, name: p.name, distance: 0, band_name: 'Internal Roster', type: 'local' }));
 
-        // 🌟 SECURE ISOLATION: Global Spares come from OTHER bands only
         const globalSparesList = (() => {
           if (concert.latitude === null || concert.longitude === null) return [];
           return globalSpares
@@ -235,18 +223,13 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
         };
 
         return (
-          <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '160px' }}>
+          <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '170px' }}>
             <div
-              className={`matrix-cell-rich ${getCellBg(status)}`}
               onClick={(e) => handleCellClick(e, cellId, avail)}
               style={{
-                padding: '10px 12px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                border: '1px solid transparent',
+                padding: '10px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex',
+                justifyContent: 'space-between', alignItems: 'center', fontSize: '14px',
+                backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}`,
                 transition: 'all 0.2s'
               }}
             >
@@ -294,15 +277,17 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
             )}
 
             {sparesModalOpen && (
-              <div className="modal-overlay" style={{ zIndex: 10000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => setSparesModalOpen(false)}>
-                <div className="modal" style={{ width: '480px', maxWidth: '95vw', background: '#fff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
-                  <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>Find {player.instrument} Spares</h3>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>Configure backup tracking pipeline for <strong>{concert.name}</strong></p>
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }} onClick={() => setSparesModalOpen(false)}>
+                <div style={{ width: '480px', maxWidth: '95vw', background: '#fff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>Find {player.instrument} Spares</h3>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>Configure backup pipeline for <strong>{concert.name}</strong></p>
+                    </div>
+                    <button type="button" onClick={() => setSparesModalOpen(false)} style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20}/></button>
                   </div>
 
                   <div style={{ padding: '20px', maxHeight: '400px', overflowY: 'auto', background: '#f8fafc' }}>
-                    
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '12px', letterSpacing: '0.05em' }}>
                       <Users size={14} /> <span>YOUR LOCAL SPARES</span>
                     </div>
@@ -342,7 +327,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, act
                     ) : (
                       <div style={{ padding: '12px', background: '#f1f5f9', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}><AlertCircle size={14}/> Network Radar Context:</div>
-                        No unbooked marketplace duplicates found in proximity.
+                        No unbooked marketplace duplicates found in proximity filters.
                       </div>
                     )}
                   </div>
@@ -410,11 +395,8 @@ export default function AvailabilityMatrix() {
               if (!pObj || !cObj) return prev; 
               
               const enrichedCell: AvailabilityCell = {
-                ...newRow,
-                id: `${newRow.player_id}-${newRow.concert_id}`,
-                player: pObj,
-                concert: cObj,
-                approached_spares: newRow.approached_spares || []
+                ...newRow, id: `${newRow.player_id}-${newRow.concert_id}`,
+                player: pObj, concert: cObj, approached_spares: newRow.approached_spares || []
               };
               
               const existingIdx = prev.findIndex((a) => a.id === enrichedCell.id);
@@ -432,9 +414,7 @@ export default function AvailabilityMatrix() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   async function fetchData() {
@@ -448,11 +428,9 @@ export default function AvailabilityMatrix() {
         setMyBandId(currentBand.id);
 
         const [playersRes, concertsRes, availabilityRes, globalSparesRes, instruments] = await Promise.all([
-          // 🌟 BUG FIX 1: Lock down player list to YOUR band only!
           supabase.from('players').select('*').eq('band_id', currentBand.id).order('instrument').order('sort_order').order('name'),
           supabase.from('concerts').select('*').eq('band_id', currentBand.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
           supabase.from('availability').select('*'),
-          // 🌟 BUG FIX 2: Find actual 'Spare' status players from the rest of the database!
           supabase.from('players').select('id, name, instrument, band_id, bands ( name, latitude, longitude )').eq('status', 'Spare'),
           fetchAllInstruments(),
         ]);
@@ -462,22 +440,19 @@ export default function AvailabilityMatrix() {
 
         setPlayers(loadedPlayers);
         playersRef.current = loadedPlayers; 
-        
         setConcerts(loadedConcerts);
         concertsRef.current = loadedConcerts; 
-        
         setAllInstruments(instruments);
         setGlobalSpares(globalSparesRes.data || []);
 
         if (availabilityRes.data) {
           setAvailability(
             (availabilityRes.data as any[]).map((a) => ({
-              ...a,
-              id: `${a.player_id}-${a.concert_id}`,
+              ...a, id: `${a.player_id}-${a.concert_id}`,
               player: loadedPlayers.find((p) => p.id === a.player_id)!,
               concert: loadedConcerts.find((c) => c.id === a.concert_id)!,
               approached_spares: a.approached_spares || []
-            })).filter(a => a.player && a.concert) // Clean up any orphaned rows safely
+            })).filter(a => a.player && a.concert)
           );
         }
       }
@@ -494,12 +469,8 @@ export default function AvailabilityMatrix() {
 
   async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[]) {
     const patch = { 
-      player_id: playerId, 
-      concert_id: concertId, 
-      status, 
-      spare_player_id: spareId || null,
-      approached_spares: shortlist || [],
-      current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0,
+      player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null,
+      approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0,
       approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null
     };
 
@@ -556,15 +527,10 @@ export default function AvailabilityMatrix() {
     e.preventDefault();
     if (!newPlayerForm.instrument) { showToast('Please select an instrument'); return; }
     
-    // 🌟 INJECT BAND ID INTO NEW PLAYER
     const { data: inserted, error = null } = await supabase.from('players').insert({
-      name: newPlayerForm.name, 
-      instrument: newPlayerForm.instrument,
-      email: newPlayerForm.email || null, 
-      phone: newPlayerForm.phone || null,
-      status: newPlayerForm.status, 
-      band_id: myBandId,
-      tags: []
+      name: newPlayerForm.name, instrument: newPlayerForm.instrument,
+      email: newPlayerForm.email || null, phone: newPlayerForm.phone || null,
+      status: newPlayerForm.status, band_id: myBandId, tags: []
     }).select().single();
     
     if (error || !inserted) { showToast('Error adding player'); return; }
@@ -588,18 +554,23 @@ export default function AvailabilityMatrix() {
   const sortedInstruments = allInstruments.filter((inst) => getActivePlayers(inst).length > 0);
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Availability Data...</div>;
-  if (concerts.length === 0) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}><h2>Availability Matrix</h2><p>No live concerts available. Add some in the Concerts tab!</p></div>;
 
   return (
-    <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: '0 0 8px 0' }}>Availability Matrix</h1>
-        <p style={{ color: '#64748b', margin: 0 }}>Track player availability for upcoming concerts. Click a cell to update status.</p>
+    /* 🌟 FIX: standard 32px wrapping container to stay inside the shell layout properly */
+    <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
+      
+      {/* 🌟 UNIFIED MASTER PAGE HEADER STYLE */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
+        <Grid3X3 size={36} color="#1e3a5f" />
+        <div>
+          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Availability Matrix</h1>
+          <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' }}>Track player availability for upcoming concerts. Click a cell to update status.</p>
+        </div>
       </div>
       
-      {/* 🌟 STRUCTURAL CSS FIX: Wraps the table perfectly so it doesn't squash */}
-      <div style={{ overflowX: 'auto', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px', whiteSpace: 'nowrap' }}>
+      {/* 🌟 UNIFIED CONTAINER CARD */}
+      <div style={{ overflowX: 'auto', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
               <th style={{ padding: '16px 8px', position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '40px' }} />
@@ -640,27 +611,27 @@ export default function AvailabilityMatrix() {
         </table>
       </div>
 
-      {/* Simplified generic modals / toasts remain below */}
+      {/* Add Player Dialog Modal */}
       {addPlayerOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px 0' }}>Add new {newPlayerForm.instrument}</h3>
+            <h3 style={{ margin: '0 0 16px 0', fontWeight: 700, color: '#0f172a' }}>Add new {newPlayerForm.instrument}</h3>
             <form onSubmit={saveNewPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <input type="text" value={newPlayerForm.name} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, name: e.target.value })} placeholder="Full Name" required style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <select value={newPlayerForm.status} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, status: e.target.value as any })} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+              <input type="text" value={newPlayerForm.name} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, name: e.target.value })} placeholder="Full Name" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              <select value={newPlayerForm.status} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, status: e.target.value as any })} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
                 <option value="Active">Active Core Player</option>
                 <option value="Spare">Local Band Spare</option>
               </select>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setAddPlayerOpen(false)} style={{ flex: 1, padding: '10px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" style={{ flex: 1, padding: '10px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Save Player</button>
+                <button type="button" onClick={() => setAddPlayerOpen(false)} style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                <button type="submit" style={{ flex: 1, padding: '10px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Save Player</button>
               </div>
             </form>
           </div>
         </div>
       )}
       {toast && (
-        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#1e293b', color: '#fff', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 10000, fontWeight: 500 }}>
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 10000, fontWeight: 500 }}>
           {toast}
         </div>
       )}
