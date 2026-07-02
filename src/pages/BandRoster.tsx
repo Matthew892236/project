@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, Trash2, ShieldAlert, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, Trash2, ShieldAlert, CheckCircle, Loader2, Mail, GripVertical } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Player {
   id: string;
@@ -10,6 +27,7 @@ interface Player {
   phone?: string;
   status: string;
   band_id: number;
+  sort_order?: number;
 }
 
 const STANDARD_INSTRUMENTS = [
@@ -19,6 +37,65 @@ const STANDARD_INSTRUMENTS = [
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
+// --- Sortable Player Row Component ---
+function SortablePlayerRow({ player, onDelete }: { player: Player, onDelete: (p: Player) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px 16px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '6px',
+    gap: '12px',
+    position: 'relative' as const,
+    zIndex: isDragging ? 10 : 1
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* Drag Handle */}
+      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: '#94a3b8', display: 'flex', padding: '4px' }}>
+        <GripVertical size={16} />
+      </div>
+      
+      {/* Player Name */}
+      <div style={{ flex: 1, fontWeight: 600, color: '#0f172a', fontSize: '14px' }}>
+        {player.name}
+      </div>
+
+      {/* Status Tag */}
+      <div style={{ width: '100px' }}>
+        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, backgroundColor: player.status === 'Active' ? '#dcfce7' : '#fef3c7', color: player.status === 'Active' ? '#166534' : '#92400e' }}>
+          {player.status}
+        </span>
+      </div>
+
+      {/* Action Buttons (Email + Delete) */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <a 
+          href={`mailto:${player.email}`} 
+          title={`Email ${player.name}`}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', backgroundColor: '#eff6ff', color: '#3b82f6', textDecoration: 'none', transition: 'background 0.2s' }}
+        >
+          <Mail size={16} />
+        </a>
+        <button 
+          onClick={() => onDelete(player)} 
+          title="Remove from roster"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#ef4444', border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 export default function BandRoster() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [bandId, setBandId] = useState<number | null>(null);
@@ -27,11 +104,17 @@ export default function BandRoster() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Form Fields
   const [name, setName] = useState('');
   const [instrument, setInstrument] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('Active');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     fetchIsolatedRoster();
@@ -48,7 +131,7 @@ export default function BandRoster() {
 
       setBandId(band.id);
 
-      const { data: rosterData } = await supabase.from('players').select('*').eq('band_id', band.id);
+      const { data: rosterData } = await supabase.from('players').select('*').eq('band_id', band.id).order('sort_order');
       if (rosterData) setPlayers(rosterData as Player[]);
     } catch (err: any) {
       setError(err.message || "Failed to load roster.");
@@ -65,9 +148,13 @@ export default function BandRoster() {
     setSuccess(null);
 
     try {
+      // Find the current highest sort_order for this instrument so they drop at the bottom of their section
+      const sectionPlayers = players.filter(p => p.instrument === instrument);
+      const newSortOrder = sectionPlayers.length;
+
       const { data: newPlayer, error: insertError } = await supabase
         .from('players')
-        .insert({ name: name.trim(), instrument, email: email.trim().toLowerCase(), phone: phone.trim() || null, status, band_id: bandId })
+        .insert({ name: name.trim(), instrument, email: email.trim().toLowerCase(), phone: phone.trim() || null, status, band_id: bandId, sort_order: newSortOrder })
         .select()
         .single();
 
@@ -93,57 +180,78 @@ export default function BandRoster() {
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent, instrumentSection: string) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const section = players.filter(p => p.instrument === instrumentSection);
+    const oldIdx = section.findIndex(p => p.id === active.id);
+    const newIdx = section.findIndex(p => p.id === over.id);
+
+    if (oldIdx === -1 || newIdx === -1) return;
+
+    const reordered = arrayMove(section, oldIdx, newIdx);
+
+    setPlayers(prev => {
+      const others = prev.filter(p => p.instrument !== instrumentSection);
+      return [...others, ...reordered];
+    });
+
+    // Save new order to database
+    await Promise.all(
+      reordered.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id))
+    );
+  }
+
   if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading roster...</div>;
 
   return (
     <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '1400px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
         <Users size={36} color="#1e3a5f" />
-        <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster Registry</h1>
+        <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster</h1>
       </div>
 
       {error && <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '16px', borderRadius: '8px', marginBottom: '24px', display: 'flex', gap: '8px' }}><ShieldAlert size={20}/> {error}</div>}
       {success && <div style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '16px', borderRadius: '8px', marginBottom: '24px', display: 'flex', gap: '8px' }}><CheckCircle size={20}/> {success}</div>}
 
-      {/* 🌟 LAYOUT FIX: 2fr for Matrix (Left), 1fr for Form (Right) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(320px, 1fr)', gap: '32px', alignItems: 'start' }}>
         
-        {/* LEFT COLUMN: Clean Matrix Grid */}
+        {/* LEFT COLUMN: The Classic List View */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-          <div style={{ padding: '20px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
              <h2 style={{ fontSize: '18px', margin: 0, color: '#0f172a' }}>Current Instrumentation</h2>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {STANDARD_INSTRUMENTS.map(inst => {
               const seatPlayers = players.filter(p => p.instrument === inst);
+              
               return (
-                <div key={inst} style={{ display: 'flex', minHeight: '52px', borderBottom: '1px solid #f1f5f9' }}>
-                  {/* Fixed-width Instrument Column */}
-                  <div style={{ width: '180px', padding: '14px 20px', backgroundColor: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '14px', display: 'flex', alignItems: 'center', borderRight: '1px solid #f1f5f9' }}>
+                <div key={inst} style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', minHeight: '56px' }}>
+                  
+                  {/* Fixed Width Instrument Name */}
+                  <div style={{ width: '200px', padding: '16px 20px', backgroundColor: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '14px', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>
                     {inst}
                   </div>
                   
-                  {/* Player Slot Column */}
-                  <div style={{ flex: 1, padding: '14px 20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  {/* Player Roster Container (Stacks vertically) */}
+                  <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#ffffff' }}>
                     {seatPlayers.length > 0 ? (
-                      seatPlayers.map(p => (
-                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px' }}>
-                          <span style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{p.name}</span>
-                          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, backgroundColor: p.status === 'Active' ? '#dcfce7' : '#fef3c7', color: p.status === 'Active' ? '#166534' : '#92400e' }}>
-                            {p.status}
-                          </span>
-                          <button onClick={() => handleDeletePlayer(p)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex' }} title="Remove Player">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, inst)}>
+                        <SortableContext items={seatPlayers.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                          {seatPlayers.map(p => (
+                            <SortablePlayerRow key={p.id} player={p} onDelete={handleDeletePlayer} />
+                          ))}
+                        </SortableContext>
+                      </DndContext>
                     ) : (
-                      <div style={{ color: '#ef4444', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, backgroundColor: '#fef2f2', padding: '6px 12px', borderRadius: '6px' }}>
-                        <AlertTriangle size={14} /> Player Vacant
-                      </div>
+<div style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', fontWeight: 500, backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', padding: '8px 16px', borderRadius: '6px', width: 'fit-content', fontStyle: 'italic' }}>
+  Position Vacant
+</div>
                     )}
                   </div>
+
                 </div>
               );
             })}
@@ -152,7 +260,7 @@ export default function BandRoster() {
 
         {/* RIGHT COLUMN: Slim Form */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'sticky', top: '24px' }}>
-          <h2 style={{ fontSize: '18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', margin: '0 0 20px 0' }}><UserPlus size={20} /> Add Musician</h2>
+          <h2 style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', margin: '0 0 20px 0' }}><UserPlus size={20} /> Add Musician</h2>
           <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
             <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
@@ -161,7 +269,7 @@ export default function BandRoster() {
             </select>
             <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
               <option value="Active">Active Core Player</option>
-              <option value="Spare">Spare / Dep List</option>
+              <option value="Spare">Local Spare / Dep</option>
             </select>
             <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
