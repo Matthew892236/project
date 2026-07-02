@@ -17,16 +17,39 @@ export default function Overview() {
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
-    // Authenticated mode: Direct table fetch structure matching our updated database sync strategy
-    const [playersRes, concertsRes, availabilityRes] = await Promise.all([
-      supabase.from('players').select('*').order('instrument, name'),
-      supabase.from('concerts').select('*').order('concert_date'),
-      supabase.from('availability').select('*'), 
-    ]);
-    if (playersRes.data) setPlayers(playersRes.data as Player[]);
-    if (concertsRes.data) setConcerts(concertsRes.data as Concert[]);
-    if (availabilityRes.data) setAvailability(availabilityRes.data);
-    setLoading(false);
+    setLoading(true);
+    try {
+      // 1. Who is logged in?
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+
+      // 2. What is their band ID?
+      const { data: band } = await supabase
+        .from('bands')
+        .select('id')
+        .eq('manager_id', userData.user.id)
+        .maybeSingle();
+
+      if (!band) {
+        setLoading(false);
+        return; 
+      }
+
+      // 3. 🌟 STRICT ISOLATION: Fetch only data for THIS band
+      const [playersRes, concertsRes, availabilityRes] = await Promise.all([
+        supabase.from('players').select('*').eq('band_id', band.id).order('instrument, name'),
+        supabase.from('concerts').select('*').eq('band_id', band.id).order('concert_date'),
+        supabase.from('availability').select('*').eq('band_id', band.id), 
+      ]);
+
+      if (playersRes.data) setPlayers(playersRes.data as Player[]);
+      if (concertsRes.data) setConcerts(concertsRes.data as Concert[]);
+      if (availabilityRes.data) setAvailability(availabilityRes.data);
+    } catch (err) {
+      console.error("Error securing isolated band data:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 4000); }

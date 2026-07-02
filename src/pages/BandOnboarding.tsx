@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Music, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Music, ArrowRight, ShieldAlert, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type OnboardingProps = {
@@ -9,7 +9,9 @@ type OnboardingProps = {
 export default function BandOnboarding({ onComplete }: OnboardingProps) {
   const [bandName, setBandName] = useState('');
   const [location, setLocation] = useState('');
+  const [postcode, setPostcode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Complete Configuration');
   const [error, setError] = useState<string | null>(null);
 
   async function handleOnboardingSubmit(e: React.FormEvent) {
@@ -18,8 +20,9 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
 
     const cleanBandName = bandName.trim();
     const cleanLocation = location.trim();
+    const cleanPostcode = postcode.trim().replace(/\s+/g, ''); // Remove spaces for the API
 
-    if (!cleanBandName || !cleanLocation) {
+    if (!cleanBandName || !cleanLocation || !cleanPostcode) {
       setError('Please fill out all fields to register your band.');
       return;
     }
@@ -27,29 +30,41 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
     setLoading(true);
 
     try {
-      // 1. Fetch the authenticated user profile
+      // 1. Check Authentication
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        throw new Error('Authentication session expired. Please log in again.');
+      if (userError || !user) throw new Error('Authentication session expired. Please log in again.');
+
+      // 2. 🌍 SMART GEOCODING: Translate Postcode to Coordinates
+      setLoadingText('Locating Bandroom...');
+      const geoResponse = await fetch(`https://api.postcodes.io/postcodes/${cleanPostcode}`);
+      const geoData = await geoResponse.json();
+
+      if (geoData.status !== 200) {
+        throw new Error('We could not find that UK Postcode. Please check it and try again.');
       }
 
-      // 2. Insert the brand new isolated band profile row
+      const exactLat = geoData.result.latitude;
+      const exactLng = geoData.result.longitude;
+      const formattedPostcode = geoData.result.postcode;
+
+      // 3. Save everything to Supabase
+      setLoadingText('Initializing Secure Suite...');
       const { data: newBand, error: bandError } = await supabase
         .from('bands')
         .insert({
           name: cleanBandName,
           location: cleanLocation,
+          postcode: formattedPostcode,
+          latitude: exactLat,
+          longitude: exactLng,
           manager_id: user.id
         })
         .select()
         .single();
 
-      if (bandError || !newBand) {
-        throw new Error(bandError?.message || 'Failed to initialize band profile record.');
-      }
+      if (bandError || !newBand) throw new Error(bandError?.message || 'Failed to initialize band profile record.');
 
-      // 3. 🚀 TRIGGER: Invoke the Welcome Explainer Email Cloud Function
+      // 4. Trigger Welcome Email
       try {
         await supabase.functions.invoke('send-welcome-email', {
           body: {
@@ -59,17 +74,16 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
           }
         });
       } catch (emailErr) {
-        // Silent catch: Don't block onboarding completion if email microservice experiences network latency
-        console.error('Background welcome email initialization skipped:', emailErr);
+        console.error('Welcome email skipped:', emailErr);
       }
 
-      // 4. Advance the user directly to their freshly isolated dashboard
       onComplete();
 
     } catch (err: any) {
-      setError(err.message || 'An unexpected database synchronization error occurred.');
+      setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
+      setLoadingText('Complete Configuration');
     }
   }
 
@@ -109,7 +123,7 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
             Set Up Your Band
           </h1>
           <p style={{ color: '#64748b', fontSize: '14px', margin: 0, lineHeight: 1.5 }}>
-            Create an isolated secure profile repository for your organization.
+            Create your secure profile and map your bandroom location.
           </p>
         </div>
 
@@ -135,50 +149,44 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
         <form onSubmit={handleOnboardingSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Band Name</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                value={bandName}
-                onChange={(e) => setBandName(e.target.value)}
-                placeholder="e.g., City Brass Band"
-                disabled={loading}
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-              />
-            </div>
+            <input
+              type="text"
+              value={bandName}
+              onChange={(e) => setBandName(e.target.value)}
+              placeholder="e.g., City Brass Band"
+              disabled={loading}
+              required
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Location / Region</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., Greater Manchester, UK"
-                disabled={loading}
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-              />
-            </div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Town / City</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g., Marple"
+              disabled={loading}
+              required
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <MapPin size={14} /> Rehearsal Postcode
+            </label>
+            <input
+              type="text"
+              value={postcode}
+              onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+              placeholder="e.g., SK6 6AA"
+              disabled={loading}
+              required
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', outline: 'none', letterSpacing: '1px' }}
+            />
+            <span style={{ fontSize: '11px', color: '#64748b' }}>We use this to match you with nearby spare players!</span>
           </div>
 
           <button
@@ -202,7 +210,7 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
               transition: 'background-color 0.2s'
             }}
           >
-            {loading ? 'Initializing Secure Suite…' : 'Complete Configuration'}
+            {loadingText}
             {!loading && <ArrowRight size={16} />}
           </button>
         </form>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, Trash2, ShieldAlert, CheckCircle, Loader2 } from 'lucide-react';
+import { Users, UserPlus, Trash2, ShieldAlert, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface Player {
@@ -8,9 +8,16 @@ interface Player {
   instrument: string;
   email: string;
   phone?: string;
-  status: 'Active' | 'Inactive';
+  status: string;
   band_id: number;
 }
+
+const STANDARD_INSTRUMENTS = [
+  "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
+  "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
+  "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
+  "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
+];
 
 export default function BandRoster() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -25,6 +32,7 @@ export default function BandRoster() {
   const [instrument, setInstrument] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [status, setStatus] = useState('Active'); // 🌟 Added Status State
 
   useEffect(() => {
     fetchIsolatedRoster();
@@ -34,40 +42,32 @@ export default function BandRoster() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Resolve current active authentication session
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) throw new Error("Authentication session expired.");
 
-      // 2. Identify the specific band mapped to this manager account
-      const { data: band, error: bandError } = await supabase
+      const { data: band } = await supabase
         .from('bands')
         .select('id')
         .eq('manager_id', userData.user.id)
         .maybeSingle();
 
-      if (bandError) throw bandError;
-
       if (!band) {
-        // If no band exists yet, keep roster beautifully empty/clean
         setLoading(false);
         return;
       }
 
       setBandId(band.id);
 
-      // 3. 🌟 SECURITY FILTER: Pull ONLY players assigned to this unique band
+      // 🌟 SECURE ISOLATION: Fetch only this band's players
       const { data: rosterData, error: rosterError } = await supabase
         .from('players')
         .select('*')
-        .eq('band_id', band.id)
-        .order('instrument', { ascending: true })
-        .order('name', { ascending: true });
+        .eq('band_id', band.id);
 
       if (rosterError) throw rosterError;
       setPlayers(rosterData as Player[] || []);
 
     } catch (err: any) {
-      console.error("Roster compilation error:", err);
       setError(err.message || "Failed to load your band roster registry.");
     } finally {
       setLoading(false);
@@ -76,17 +76,13 @@ export default function BandRoster() {
 
   async function handleAddPlayer(e: React.FormEvent) {
     e.preventDefault();
-    if (!bandId) {
-      setError("No active band profile resolved. Complete onboarding first.");
-      return;
-    }
+    if (!bandId) return setError("No active band profile resolved.");
 
     setError(null);
     setSuccess(null);
     setSubmitting(true);
 
     try {
-      // 🌟 INSULATION: Explicitly inject the current band_id into the payload
       const { data: newPlayer, error: insertError } = await supabase
         .from('players')
         .insert({
@@ -94,7 +90,7 @@ export default function BandRoster() {
           instrument: instrument,
           email: email.trim().toLowerCase(),
           phone: phone.trim() || null,
-          status: 'Active',
+          status: status, // 🌟 Saves Active or Spare status
           band_id: bandId
         })
         .select()
@@ -102,14 +98,14 @@ export default function BandRoster() {
 
       if (insertError) throw insertError;
 
-      setPlayers(prev => [...prev, newPlayer as Player].sort((a, b) => a.instrument.localeCompare(b.instrument)));
-      setSuccess(`${name.trim()} added to your roster successfully!`);
+      setPlayers(prev => [...prev, newPlayer as Player]);
+      setSuccess(`${name.trim()} added successfully!`);
       
-      // Reset form fields
       setName('');
       setInstrument('');
       setEmail('');
       setPhone('');
+      setStatus('Active');
 
     } catch (err: any) {
       setError(err.message || "Could not register player profile.");
@@ -119,153 +115,95 @@ export default function BandRoster() {
   }
 
   async function handleDeletePlayer(player: Player) {
-    if (!bandId) return;
-    if (!confirm(`Are you absolutely sure you want to remove ${player.name} from your registry?`)) return;
-
-    setError(null);
-    setSuccess(null);
+    if (!bandId || !confirm(`Remove ${player.name} from the registry?`)) return;
 
     try {
-      // 🌟 SECURE MATCHING: Ensure they can only delete if the row matches BOTH player ID and their own band ID
       const { error: deleteError } = await supabase
         .from('players')
         .delete()
         .match({ id: player.id, band_id: bandId });
 
       if (deleteError) throw deleteError;
-
       setPlayers(prev => prev.filter(p => p.id !== player.id));
-      setSuccess('Player profile detached from registry.');
-
     } catch (err: any) {
-      setError(err.message || "Security block: Unable to drop player asset.");
+      setError("Security block: Unable to drop player asset.");
     }
   }
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', gap: '10px' }}>
-        <Loader2 className="animate-spin" color="#1e3a5f" size={32} />
-        <span style={{ color: '#64748b', fontWeight: 500 }}>Syncing secure roster data...</span>
-      </div>
-    );
-  }
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading roster...</div>;
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'system-ui, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
-      
-      {/* Header Block */}
+    <div style={{ padding: '24px', fontFamily: 'system-ui', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
         <Users size={32} color="#1e3a5f" />
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster Registry</h1>
-          <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' }}>Manage players securely isolated within your operational suite.</p>
-        </div>
+        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster Registry</h1>
       </div>
 
-      {/* Dynamic Feedback Overlays */}
-      {error && (
-        <div style={{ display: 'flex', gap: '8px', backgroundColor: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '14px' }}>
-          <ShieldAlert size={18} style={{ flexShrink: 0 }} />
-          <span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div style={{ display: 'flex', gap: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '14px' }}>
-          <CheckCircle size={18} style={{ flexShrink: 0 }} />
-          <span>{success}</span>
-        </div>
-      )}
+      {error && <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '24px' }}><ShieldAlert size={18}/> {error}</div>}
+      {success && <div style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '12px', borderRadius: '8px', marginBottom: '24px' }}><CheckCircle size={18}/> {success}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '32px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '32px', alignItems: 'start' }}>
         
-        {/* Left Column: Form Intake Box */}
-        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <UserPlus size={20} color="#1e3a5f" /> Add New Musician
-          </h2>
-          
+        {/* FORM */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px' }}>
+          <h2 style={{ fontSize: '18px', marginBottom: '20px' }}><UserPlus size={20} /> Add Musician</h2>
           <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Full Name</label>
-              <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Jane Doe" style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px' }} />
-            </div>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '10px' }} />
+            
+            <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '10px' }}>
+              <option value="">Select instrument...</option>
+              {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
+            </select>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Instrument Assignment</label>
-              <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', backgroundColor: '#fff' }}>
-                <option value="">Select section position...</option>
-                <option value="Principal Cornet">Principal Cornet</option>
-                <option value="Solo Cornet">Solo Cornet</option>
-                <option value="Soprano Cornet">Soprano Cornet</option>
-                <option value="Repiano Cornet">Repiano Cornet</option>
-                <option value="2nd Cornet">2nd Cornet</option>
-                <option value="3rd Cornet">3rd Cornet</option>
-                <option value="Flugelhorn">Flugelhorn</option>
-                <option value="Solo Horn">Solo Horn</option>
-                <option value="1st Horn">1st Horn</option>
-                <option value="2nd Horn">2nd Horn</option>
-                <option value="1st Baritone">1st Baritone</option>
-                <option value="2nd Baritone">2nd Baritone</option>
-                <option value="Euphonium">Euphonium</option>
-                <option value="1st Trombone">1st Trombone</option>
-                <option value="2nd Trombone">2nd Trombone</option>
-                <option value="Bass Trombone">Bass Trombone</option>
-                <option value="EEb Bass">EEb Bass</option>
-                <option value="BBb Bass">BBb Bass</option>
-                <option value="Percussion">Percussion</option>
-              </select>
-            </div>
+            {/* 🌟 RESTORED STATUS DROPDOWN */}
+            <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '10px' }}>
+              <option value="Active">Active Core Player</option>
+              <option value="Spare">Spare / Dep List</option>
+            </select>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Email Address (For Notifications)</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="musician@example.com" style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px' }} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Phone Number (Optional)</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g., 07123 456789" style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px' }} />
-            </div>
-
-            <button type="submit" disabled={submitting} style={{ backgroundColor: '#1e3a5f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 600, fontSize: '14px', marginTop: '8px', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.8 : 1 }}>
-              {submitting ? 'Registering...' : 'Add to Band Roster'}
-            </button>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" style={{ padding: '10px' }} />
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '10px' }} />
+            <button type="submit" disabled={submitting} style={{ padding: '12px', backgroundColor: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px' }}>{submitting ? 'Saving...' : 'Add Player'}</button>
           </form>
         </div>
 
-        {/* Right Column: Grid Roster Table View */}
-        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>
-            Registered Members ({players.length})
-          </h2>
-
-          {players.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', border: '2px dashed #e2e8f0', borderRadius: '8px', color: '#64748b' }}>
-              <Users size={24} style={{ margin: '0 auto 8px auto', opacity: 0.6 }} />
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: 500 }}>Your roster is empty.</p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.8 }}>Add players using the configuration interface to get started.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '550px', overflowY: 'auto' }}>
-              {players.map(player => (
-                <div key={player.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', border: '1px solid #f1f5f9', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <div>
-                    <h4 style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>{player.name}</h4>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e3a5f', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px' }}>
-                      {player.instrument}
-                    </span>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>{player.email}</div>
+        {/* MATRIX GRID WITH VACANCIES */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px' }}>
+          <h2 style={{ fontSize: '18px', marginBottom: '20px' }}>Current Instrumentation</h2>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '600px', overflowY: 'auto' }}>
+            {STANDARD_INSTRUMENTS.map(inst => {
+              const seatPlayers = players.filter(p => p.instrument === inst);
+              
+              return (
+                <div key={inst} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid #e2e8f0', color: '#1e3a5f' }}>
+                    {inst}
                   </div>
-                  
-                  <button onClick={() => handleDeletePlayer(player)} title="Delete player from database" style={{ border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', padding: '8px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.2s' }}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {seatPlayers.length > 0 ? (
+                      seatPlayers.map(p => (
+                        <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <span style={{ fontWeight: 500 }}>{p.name}</span>
+                            <span style={{ fontSize: '12px', marginLeft: '8px', padding: '2px 6px', borderRadius: '4px', backgroundColor: p.status === 'Active' ? '#dcfce7' : '#fef3c7', color: p.status === 'Active' ? '#166534' : '#92400e' }}>
+                              {p.status}
+                            </span>
+                          </div>
+                          <button onClick={() => handleDeletePlayer(p)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: '#ef4444', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                        <AlertTriangle size={16} /> Vacant Position
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
-
       </div>
     </div>
   );
