@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Music, MapPin, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Music, ArrowRight, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type OnboardingProps = {
