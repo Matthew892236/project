@@ -1,18 +1,17 @@
 import { useState } from 'react';
-import { Music, Eye, EyeOff } from 'lucide-react';
+import { Music, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type Mode = 'login' | 'signup' | 'forgot'; // Expanded modes to include 'forgot'
+type Mode = 'login' | 'signup' | 'forgot';
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login');
-  const [bandName, setBandName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null); // State for email verification feedback
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,17 +21,15 @@ export default function Login() {
 
     try {
       if (mode === 'signup') {
-        const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+        // Step 1: Strictly create the Auth account.
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
-        if (data.user) {
-          const { error: profileError } = await supabase.from('profiles').insert({
-            id: data.user.id,
-            band_name: bandName,
-          });
-          if (profileError) throw profileError;
-        }
+        
+        // Success! Alert them to look for the confirmation email
+        setSuccessMessage('Verification link sent! Please check your email inbox to confirm your account.');
+        setMode('login'); // Softly slide back to login screen
+        setPassword('');   // Clear password field for safety
       } else if (mode === 'forgot') {
-        // Trigger Supabase's built-in password reset magic
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/`,
         });
@@ -43,7 +40,7 @@ export default function Login() {
         if (signInError) throw signInError;
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'An error occurred during authentication.');
     } finally {
       setLoading(false);
     }
@@ -67,17 +64,23 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          {mode === 'signup' && (
-            <div className="form-group">
-              <label>Band Name</label>
-              <input
-                type="text"
-                value={bandName}
-                onChange={(e) => setBandName(e.target.value)}
-                placeholder="e.g., Thornton Brass Band"
-                required
-                autoFocus
-              />
+          {/* 🌟 SUCCESS FEEDBACK MESSAGE */}
+          {successMessage && (
+            <div style={{ 
+              color: '#166534', 
+              backgroundColor: '#dcfce7', 
+              border: '1px solid #bbf7d0', 
+              padding: '12px 14px', 
+              borderRadius: '6px', 
+              fontSize: '14px', 
+              marginBottom: '20px',
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              lineHeight: 1.4
+            }}>
+              <MailCheck size={18} style={{ flexShrink: 0 }} />
+              <span>{successMessage}</span>
             </div>
           )}
 
@@ -89,11 +92,10 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="band@example.com"
               required
-              autoFocus={mode !== 'signup'}
+              autoFocus
             />
           </div>
 
-          {/* Hide the password field entirely if they are resetting their password */}
           {mode !== 'forgot' && (
             <div className="form-group">
               <label>Password</label>
@@ -102,7 +104,7 @@ export default function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === 'signup' ? 'Create a password' : 'Enter your password'}
+                  placeholder={mode === 'signup' ? 'Create a secure password' : 'Enter your password'}
                   required
                   minLength={6}
                 />
@@ -116,7 +118,6 @@ export default function Login() {
                 </button>
               </div>
               
-              {/* Added: Clickable inline link for forgot password */}
               {mode === 'login' && (
                 <div style={{ textAlign: 'right', marginTop: '6px' }}>
                   <button
@@ -133,24 +134,9 @@ export default function Login() {
           )}
 
           {error && <div className="login-error">{error}</div>}
-          
-          {/* Added: Green styling box for a successful reset transmission */}
-          {successMessage && (
-            <div style={{ 
-              color: '#155724', 
-              backgroundColor: '#d4edda', 
-              border: '1px solid #c3e6cb', 
-              padding: '10px 14px', 
-              borderRadius: 'var(--radius, 6px)', 
-              fontSize: '14px', 
-              marginBottom: '16px' 
-            }}>
-              {successMessage}
-            </div>
-          )}
 
           <button type="submit" className="btn btn-primary login-submit" disabled={loading}>
-            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Register Account' : 'Send Reset Link'}
           </button>
         </form>
 
@@ -177,6 +163,7 @@ export default function Login() {
               </button>
             </p>
           )}
+          
           <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-light)' }}>
             Need help?{' '}
             <a href="mailto:mrmatthewhill@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
