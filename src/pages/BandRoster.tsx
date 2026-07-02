@@ -105,59 +105,42 @@ export default function BandRoster() {
       {error && <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '16px', borderRadius: '8px', marginBottom: '24px', display: 'flex', gap: '8px' }}><ShieldAlert size={20}/> {error}</div>}
       {success && <div style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '16px', borderRadius: '8px', marginBottom: '24px', display: 'flex', gap: '8px' }}><CheckCircle size={20}/> {success}</div>}
 
-      {/* 🌟 RESPONSIVE GRID FIX: Will stack smoothly on small screens */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '32px', alignItems: 'start' }}>
+      {/* 🌟 LAYOUT FIX: 2fr for Matrix (Left), 1fr for Form (Right) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(320px, 1fr)', gap: '32px', alignItems: 'start' }}>
         
-        {/* Left: Form */}
-        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-          <h2 style={{ fontSize: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}><UserPlus size={20} /> Add Musician</h2>
-          <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-            <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}>
-              <option value="">Select instrument...</option>
-              {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
-            </select>
-            <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}>
-              <option value="Active">Active Core Player</option>
-              <option value="Spare">Spare / Dep List</option>
-            </select>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-            <button type="submit" disabled={submitting} style={{ padding: '14px', backgroundColor: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', marginTop: '8px', cursor: 'pointer' }}>{submitting ? 'Saving...' : 'Add Player'}</button>
-          </form>
-        </div>
-
-        {/* Right: Un-Jammed Matrix Grid */}
-        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-          <h2 style={{ fontSize: '20px', marginBottom: '24px', color: '#0f172a' }}>Current Instrumentation</h2>
+        {/* LEFT COLUMN: Clean Matrix Grid */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '20px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+             <h2 style={{ fontSize: '18px', margin: 0, color: '#0f172a' }}>Current Instrumentation</h2>
+          </div>
           
-          {/* Scrollable container with padding */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '650px', overflowY: 'auto', paddingRight: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {STANDARD_INSTRUMENTS.map(inst => {
               const seatPlayers = players.filter(p => p.instrument === inst);
               return (
-                <div key={inst} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', fontWeight: 600, borderBottom: '1px solid #e2e8f0', color: '#1e3a5f', fontSize: '15px' }}>
+                <div key={inst} style={{ display: 'flex', minHeight: '52px', borderBottom: '1px solid #f1f5f9' }}>
+                  {/* Fixed-width Instrument Column */}
+                  <div style={{ width: '180px', padding: '14px 20px', backgroundColor: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '14px', display: 'flex', alignItems: 'center', borderRight: '1px solid #f1f5f9' }}>
                     {inst}
                   </div>
-                  <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  
+                  {/* Player Slot Column */}
+                  <div style={{ flex: 1, padding: '14px 20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                     {seatPlayers.length > 0 ? (
                       seatPlayers.map(p => (
-                        <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 600, fontSize: '15px', color: '#334155' }}>{p.name}</span>
-                            <span style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px', fontWeight: 600, backgroundColor: p.status === 'Active' ? '#dcfce7' : '#fef3c7', color: p.status === 'Active' ? '#166534' : '#92400e' }}>
-                              {p.status}
-                            </span>
-                          </div>
-                          <button onClick={() => handleDeletePlayer(p)} style={{ border: 'none', background: '#fef2f2', color: '#ef4444', padding: '8px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            <Trash2 size={16} />
+                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#fff', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{p.name}</span>
+                          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, backgroundColor: p.status === 'Active' ? '#dcfce7' : '#fef3c7', color: p.status === 'Active' ? '#166534' : '#92400e' }}>
+                            {p.status}
+                          </span>
+                          <button onClick={() => handleDeletePlayer(p)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px', display: 'flex' }} title="Remove Player">
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       ))
                     ) : (
-                      <div style={{ color: '#ef4444', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, padding: '4px 0' }}>
-                        <AlertTriangle size={18} /> Vacant Position
+                      <div style={{ color: '#ef4444', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, backgroundColor: '#fef2f2', padding: '6px 12px', borderRadius: '6px' }}>
+                        <AlertTriangle size={14} /> Player Vacant
                       </div>
                     )}
                   </div>
@@ -166,6 +149,26 @@ export default function BandRoster() {
             })}
           </div>
         </div>
+
+        {/* RIGHT COLUMN: Slim Form */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'sticky', top: '24px' }}>
+          <h2 style={{ fontSize: '18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', margin: '0 0 20px 0' }}><UserPlus size={20} /> Add Musician</h2>
+          <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+            <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
+              <option value="">Select instrument...</option>
+              {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
+            </select>
+            <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
+              <option value="Active">Active Core Player</option>
+              <option value="Spare">Spare / Dep List</option>
+            </select>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+            <button type="submit" disabled={submitting} style={{ padding: '12px', backgroundColor: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', marginTop: '8px', cursor: submitting ? 'not-allowed' : 'pointer' }}>{submitting ? 'Saving...' : 'Add Player'}</button>
+          </form>
+        </div>
+
       </div>
     </div>
   );
