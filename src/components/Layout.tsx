@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, Mail, Grid3X3, Music, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Grid3X3, Music, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function Layout() {
