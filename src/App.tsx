@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import Layout from './components/Layout';
@@ -9,11 +9,10 @@ import BandView from './pages/BandView';
 import Overview from './pages/Overview';
 import ConcertDirectory from './pages/ConcertDirectory';
 import BandRoster from './pages/BandRoster';
-import AvailabilityMatrix from './pages/AvailabilityMatrix';
+import AvailabilityMatrix from './pages/Matrix'; // Matches your file save location
 import BandOnboarding from './pages/BandOnboarding';
 
-
-// 🌟 Zero-Dependency Notification Pop-up
+// Zero-Dependency Notification Pop-up
 function ResponseNotification() {
   const [status, setStatus] = useState<string | null>(null);
 
@@ -21,7 +20,6 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    // 🌟 ADDED: Now catches 'available' (core players) and 'joined-network' (global spares)
     if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network') {
       setStatus(currentStatus);
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -51,7 +49,7 @@ function ResponseNotification() {
         width: '90%',
         position: 'relative',
         border: '1px solid #e2e8f0',
-        fontFamily: 'sans-serif'
+        fontFamily: 'system-ui, sans-serif'
       }}>
         <button 
           onClick={() => setStatus(null)}
@@ -108,7 +106,7 @@ function ResponseNotification() {
   );
 }
 
-function App() {
+export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasBand, setHasBand] = useState<boolean | null>(null);
 
@@ -133,11 +131,7 @@ function App() {
           .eq('manager_id', session.user.id)
           .maybeSingle();
 
-        if (data) {
-          setHasBand(true);
-        } else {
-          setHasBand(false);
-        }
+        setHasBand(!!data);
       } else {
         setHasBand(null);
       }
@@ -146,26 +140,24 @@ function App() {
     checkBandProfile();
   }, [session]);
 
-  // 🌟 Public routes — return wrappers matching your original layout exactly
-// 🌟 Public routes — Normalized to strip trailing slashes so email clients don't break them!
   const cleanPath = window.location.pathname.replace(/\/$/, '');
 
+  // 🌟 Clean Public Entry points (Matrix removed from here so it doesn't leak out)
   if (cleanPath === '/respond') return <><Respond /><ResponseNotification /></>;
   if (cleanPath === '/band-view') return <><BandView /><ResponseNotification /></>;
-  if (cleanPath === '/matrix') return <><AvailabilityMatrix /><ResponseNotification /></>;
 
-  // Loading states
+  // Session Loading States
   if (session === undefined || (session && hasBand === null)) return null;
   
-  // Gate 1: If not logged in, go to Login
+  // Gate 1: Enforce Login Wall
   if (!session) return <><Login /><ResponseNotification /></>;
 
-  // Gate 2: If logged in but hasn't set up a band location yet, force onboarding
+  // Gate 2: Enforce Location Setup onboarding
   if (session && !hasBand) {
     return <><BandOnboarding onComplete={() => setHasBand(true)} /><ResponseNotification /></>;
   }
 
-  // Gate 3: Logged in and band exists. Open up the dashboard!
+  // Gate 3: Render Secure Core Dashboard Environment
   return (
     <>
       <BrowserRouter>
@@ -174,14 +166,14 @@ function App() {
             <Route index element={<Overview />} />
             <Route path="concerts" element={<ConcertDirectory />} />
             <Route path="roster" element={<BandRoster />} />
-            <Route path="availability" element={<AvailabilityMatrix />} />
-
+            
+            {/* 🌟 FIXED: Changed from 'availability' to 'matrix' so it links to sidebar seamlessly */}
+            <Route path="matrix" element={<AvailabilityMatrix />} /> 
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
       <ResponseNotification />
     </>
   );
 }
-
-export default App;
