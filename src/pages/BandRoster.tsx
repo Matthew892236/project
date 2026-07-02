@@ -9,7 +9,15 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core'; // 🌟 Explicit type import
+import type { DragEndEvent } from '@dnd-kit/core'; 
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Player {
   id: string;
@@ -87,7 +95,6 @@ function SortablePlayerRow({ player, onDelete }: { player: Player, onDelete: (p:
   );
 }
 
-
 export default function BandRoster() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [bandId, setBandId] = useState<number | null>(null);
@@ -140,7 +147,6 @@ export default function BandRoster() {
     setSuccess(null);
 
     try {
-      // Find the current highest sort_order for this instrument so they drop at the bottom of their section
       const sectionPlayers = players.filter(p => p.instrument === instrument);
       const newSortOrder = sectionPlayers.length;
 
@@ -189,13 +195,12 @@ export default function BandRoster() {
       return [...others, ...reordered];
     });
 
-    // Save new order to database
     await Promise.all(
       reordered.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id))
     );
   }
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}><Loader2 className="animate-spin" /> Loading roster...</div>;
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui' }}><Loader2 className="animate-spin" /> Loading roster...</div>;
 
   return (
     <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '1400px', margin: '0 auto' }}>
@@ -238,9 +243,10 @@ export default function BandRoster() {
                         </SortableContext>
                       </DndContext>
                     ) : (
-<div style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', fontWeight: 500, backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', padding: '8px 16px', borderRadius: '6px', width: 'fit-content', fontStyle: 'italic' }}>
-  Position Vacant
-</div>
+                      /* Calm Grey Placeholder Label */
+                      <div style={{ color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', fontWeight: 500, backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', padding: '8px 16px', borderRadius: '6px', width: 'fit-content', fontStyle: 'italic' }}>
+                        Position Vacant
+                      </div>
                     )}
                   </div>
 
