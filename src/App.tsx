@@ -9,7 +9,7 @@ import BandView from './pages/BandView';
 import Overview from './pages/Overview';
 import ConcertDirectory from './pages/ConcertDirectory';
 import BandRoster from './pages/BandRoster';
-import AvailabilityMatrix from './pages/Matrix'; // Matches your file save location
+import AvailabilityMatrix from './pages/AvailabilityMatrix';
 import BandOnboarding from './pages/BandOnboarding';
 
 // Zero-Dependency Notification Pop-up
