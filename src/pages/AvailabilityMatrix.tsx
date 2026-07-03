@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, UserPlus, ChevronDown, Send, Clock, Search, Grid3X3 } from 'lucide-react';
+import { GripVertical, UserPlus, ChevronDown, Clock, Search, Grid3X3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
 
@@ -353,7 +353,8 @@ export default function AvailabilityMatrix() {
         <button 
           title="Directly assign to gig"
           onClick={() => { 
-             if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
+             if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spares Contacted' as any, undefined, [s]);
+else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
              else onSetStatus(s.id, concertId, 'Available');
              
              if (dropdownId === vacantDropdown) setVacantDropdown(null);
@@ -444,12 +445,12 @@ export default function AvailabilityMatrix() {
                         // 🌟 VISUAL UPDATE FIX: Detect if a spare is successfully assigned directly to this vacant chair
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         const fillingSpare = availability.find(a => 
-                           a.concert_id === c.id && 
-                           (a.status === 'Available' || a.status === 'Spares Contacted') && 
-                           a.player?.instrument === instrument && 
-                           a.player?.status === 'Spare' && 
-                           !busySpareIds.has(a.player_id)
-                        );
+   a.concert_id === c.id && 
+   (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && 
+   a.player?.instrument === instrument && 
+   a.player?.status === 'Spare' && 
+   !busySpareIds.has(a.player_id)
+);
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status);
