@@ -21,14 +21,12 @@ export default function Login() {
 
     try {
       if (mode === 'signup') {
-        // Step 1: Strictly create the Auth account.
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
         
-        // Success! Alert them to look for the confirmation email
         setSuccessMessage('Verification link sent! Please check your email inbox to confirm your account.');
-        setMode('login'); // Softly slide back to login screen
-        setPassword('');   // Clear password field for safety
+        setMode('login'); 
+        setPassword(''); 
       } else if (mode === 'forgot') {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/`,
@@ -50,8 +48,9 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">
-            <Music size={32} />
+          {/* 🌟 MATCHING BATCH 1 BRANDING: Yellow Logo Box */}
+          <div style={{ backgroundColor: '#eab308', padding: '12px', borderRadius: '12px', display: 'inline-flex', marginBottom: '16px' }}>
+            <Music size={32} color="#1e3a5f" />
           </div>
           <h1>Brassbandwidth</h1>
           <p>
@@ -64,21 +63,8 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          {/* 🌟 SUCCESS FEEDBACK MESSAGE */}
           {successMessage && (
-            <div style={{ 
-              color: '#166534', 
-              backgroundColor: '#dcfce7', 
-              border: '1px solid #bbf7d0', 
-              padding: '12px 14px', 
-              borderRadius: '6px', 
-              fontSize: '14px', 
-              marginBottom: '20px',
-              display: 'flex',
-              gap: '8px',
-              alignItems: 'center',
-              lineHeight: 1.4
-            }}>
+            <div style={{ color: '#166534', backgroundColor: '#dcfce7', border: '1px solid #bbf7d0', padding: '12px 14px', borderRadius: '6px', fontSize: '14px', marginBottom: '20px', display: 'flex', gap: '8px', alignItems: 'center', lineHeight: 1.4 }}>
               <MailCheck size={18} style={{ flexShrink: 0 }} />
               <span>{successMessage}</span>
             </div>
@@ -86,48 +72,22 @@ export default function Login() {
 
           <div className="form-group">
             <label>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="band@example.com"
-              required
-              autoFocus
-            />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="band@example.com" required autoFocus />
           </div>
 
           {mode !== 'forgot' && (
             <div className="form-group">
               <label>Password</label>
               <div className="input-with-icon">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === 'signup' ? 'Create a secure password' : 'Enter your password'}
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  className="input-icon-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                >
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Create a secure password' : 'Enter your password'} required minLength={6} />
+                <button type="button" className="input-icon-btn" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               
               {mode === 'login' && (
                 <div style={{ textAlign: 'right', marginTop: '6px' }}>
-                  <button
-                    type="button"
-                    className="link-btn"
-                    style={{ fontSize: '13px', opacity: 0.8 }}
-                    onClick={() => { setMode('forgot'); setError(null); setSuccessMessage(null); }}
-                  >
-                    Forgot password?
-                  </button>
+                  <button type="button" className="link-btn" style={{ fontSize: '13px', opacity: 0.8 }} onClick={() => { setMode('forgot'); setError(null); setSuccessMessage(null); }}>Forgot password?</button>
                 </div>
               )}
             </div>
@@ -135,38 +95,24 @@ export default function Login() {
 
           {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="btn btn-primary login-submit" disabled={loading}>
+          <button type="submit" className="btn btn-primary login-submit" disabled={loading} style={{ backgroundColor: '#1e3a5f' }}>
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Register Account' : 'Send Reset Link'}
           </button>
         </form>
 
         <div className="login-footer">
           {mode === 'forgot' ? (
-            <p>
-              Remember your password?{' '}
-              <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}>
-                Sign in
-              </button>
-            </p>
+            <p>Remember your password? <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}>Sign in</button></p>
           ) : mode === 'login' ? (
-            <p>
-              Don't have an account?{' '}
-              <button className="link-btn" onClick={() => { setMode('signup'); setError(null); setSuccessMessage(null); }}>
-                Create one
-              </button>
-            </p>
+            <p>Don't have an account? <button className="link-btn" onClick={() => { setMode('signup'); setError(null); setSuccessMessage(null); }}>Create one</button></p>
           ) : (
-            <p>
-              Already have an account?{' '}
-              <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}>
-                Sign in
-              </button>
-            </p>
+            <p>Already have an account? <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}>Sign in</button></p>
           )}
           
           <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-light)' }}>
             Need help?{' '}
-            <a href="mailto:mrmatthewhill@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+            {/* 🌟 FIXED: Now correctly targets your domain admin email! */}
+            <a href="mailto:admin@brassbandwidth.com" style={{ color: '#1e3a5f', textDecoration: 'none', fontWeight: 600 }}>
               Contact us
             </a>
           </p>

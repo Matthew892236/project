@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, Grid3X3, Music, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Grid3X3, Music, LogOut, HelpCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function Layout() {
@@ -16,21 +16,10 @@ export default function Layout() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
-
-      const { data: band } = await supabase
-        .from('bands')
-        .select('name')
-        .eq('manager_id', userData.user.id)
-        .maybeSingle();
-
-      if (band) {
-        setBandName(band.name);
-      } else {
-        setBandName('No Band Assigned');
-      }
-    } catch (err) {
-      console.error('Error fetching band name:', err);
-      setBandName('My Band');
+      const { data: band } = await supabase.from('bands').select('name').eq('manager_id', userData.user.id).maybeSingle();
+      if (band) setBandName(band.name);
+    } catch {
+      setBandName('My Ensemble Workspace');
     }
   }
 
@@ -40,33 +29,31 @@ export default function Layout() {
   }
 
   const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Overview' },
+    { path: '/', icon: LayoutDashboard, label: 'Overview Dashboard' },
     { path: '/roster', icon: Users, label: 'Band Roster' },
     { path: '/concerts', icon: CalendarDays, label: 'Concerts & Events' },
     { path: '/matrix', icon: Grid3X3, label: 'Availability Matrix' },
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* Sidebar */}
-      <nav style={{ width: '260px', backgroundColor: '#ffffff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      {/* Main Left Fixed Sidebar Panel */}
+      <nav style={{ width: '260px', backgroundColor: '#1e3a5f', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, bottom: 0, left: 0, zIndex: 50, boxShadow: '2px 0 12px rgba(0,0,0,0.1)' }}>
         
-        {/* 🌟 Header Area with Dynamic Band Name */}
-        <div style={{ padding: '24px', borderBottom: '1px solid #f1f5f9' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ backgroundColor: '#1e3a5f', padding: '8px', borderRadius: '8px', display: 'flex' }}>
-              <Music size={24} color="#ffffff" />
+        {/* Header Logo Box */}
+        <div style={{ padding: '32px 24px 24px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+            <div style={{ backgroundColor: '#eab308', padding: '8px', borderRadius: '8px', display: 'flex' }}>
+              <Music size={22} color="#1e3a5f" />
             </div>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>Brassbandwidth</span>
+            {/* 🌟 RESTORED LOGO COLOR: Swapped layout branding text elements to custom Yellow */}
+            <span style={{ fontSize: '20px', fontWeight: 800, color: '#eab308', letterSpacing: '-0.025em' }}>Brassbandwidth</span>
           </div>
-          {/* This is the new band name label */}
-          <div style={{ fontSize: '14px', fontWeight: 600, color: '#64748b', paddingLeft: '4px' }}>
-            {bandName}
-          </div>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: '#93c5fd', paddingLeft: '4px' }}>{bandName}</div>
         </div>
 
-        {/* Navigation Links */}
-        <div style={{ padding: '16px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* Dynamic Navigation Links Block */}
+        <div style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -76,32 +63,44 @@ export default function Layout() {
                 to={item.path}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', textDecoration: 'none',
-                  borderRadius: '8px', fontWeight: 500, fontSize: '15px', transition: 'all 0.2s',
-                  backgroundColor: isActive ? '#f1f5f9' : 'transparent',
-                  color: isActive ? '#1e3a5f' : '#64748b'
+                  borderRadius: '8px', fontWeight: 600, fontSize: '14px', transition: 'all 0.2s',
+                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                  color: isActive ? '#ffffff' : '#93c5fd'
                 }}
               >
-                <Icon size={20} style={{ color: isActive ? '#1e3a5f' : '#94a3b8' }} />
+                <Icon size={18} style={{ color: isActive ? '#eab308' : '#93c5fd' }} />
                 {item.label}
               </Link>
             );
           })}
         </div>
 
-        {/* Logout Button */}
-        <div style={{ padding: '16px 12px', borderTop: '1px solid #f1f5f9' }}>
+        {/* 🌟 UNIFIED BOTTOM ROW PANEL: Repositioned Contact Us Link nicely with non-harsh Logout Button */}
+        <div style={{ padding: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: 'rgba(0,0,0,0.1)' }}>
+          <a 
+            href="mailto:admin@brassbandwidth.com" 
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', color: '#93c5fd', textDecoration: 'none', fontSize: '14px', fontWeight: 500, borderRadius: '6px', transition: 'background 0.2s' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <HelpCircle size={18} color="#93c5fd" />
+            Contact Support
+          </a>
+          
           <button
             onClick={handleLogout}
-            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', width: '100%', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontWeight: 500, fontSize: '15px', cursor: 'pointer', borderRadius: '8px', transition: 'background-color 0.2s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', width: '100%', border: 'none', backgroundColor: 'transparent', color: '#93c5fd', fontWeight: 500, fontSize: '14px', cursor: 'pointer', borderRadius: '6px', transition: 'all 0.2s', textAlign: 'left' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#93c5fd'; }}
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
             Sign Out
           </button>
         </div>
       </nav>
 
-      {/* Main Content Area */}
-      <main style={{ flex: 1, height: '100vh', overflowY: 'auto' }}>
+      {/* Main Content Pane — Pushed cleanly to the right of the fixed navigation bar */}
+      <main style={{ flex: 1, paddingLeft: '260px', height: '100vh', overflowY: 'auto', boxSizing: 'border-box' }}>
         <Outlet />
       </main>
     </div>

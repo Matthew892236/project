@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Music, Calendar, MapPin, Clock, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { INSTRUMENTS } from '../lib/supabase';
+
+// 🌟 Moved STANDARD_INSTRUMENTS locally to prevent module import errors
+const STANDARD_INSTRUMENTS = [
+  "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
+  "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
+  "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
+  "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
+];
 
 type Concert = { id: string; name: string; concert_date: string; start_time: string; end_time: string; location: string };
 type Player = { id: string; name: string; instrument: string; status: string; sort_order: number | null };
@@ -37,15 +44,31 @@ export default function BandView() {
 
   useEffect(() => {
     if (!uid) { setError('Invalid link — no band ID provided.'); setLoading(false); return; }
-    supabase.functions.invoke('get-band-view', { body: { uid } }).then(({ data, error: err }) => {
-      if (err || !data) { setError('Failed to load band schedule.'); setLoading(false); return; }
-      setBandName(data.bandName);
-      setConcerts(data.concerts);
-      setPlayers(data.players);
-      setAvailability(data.availability);
-      setLoading(false);
-    });
+    fetchPublicData();
   }, [uid]);
+
+  // 🌟 BATCH 5 FIX: Fetching directly instead of using a broken Edge Function
+  async function fetchPublicData() {
+    try {
+      const { data: bandData } = await supabase.from('bands').select('id, name').eq('id', uid).single();
+      if (!bandData) throw new Error("Band not found.");
+      setBandName(bandData.name);
+
+      const [concertsRes, playersRes, availabilityRes] = await Promise.all([
+        supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
+        supabase.from('players').select('id, name, instrument, status, sort_order').eq('band_id', bandData.id).order('sort_order'),
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id')
+      ]);
+
+      setConcerts(concertsRes.data || []);
+      setPlayers(playersRes.data || []);
+      setAvailability(availabilityRes.data || []);
+    } catch (err: any) {
+      setError('Failed to load band schedule.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function getStatus(playerId: string, concertId: string): Availability {
     return availability.find((a) => a.player_id === playerId && a.concert_id === concertId)
@@ -53,52 +76,56 @@ export default function BandView() {
   }
 
   const activePlayers = players.filter((p) => p.status === 'Active');
-  const instrumentOrder = INSTRUMENTS.filter((inst) => activePlayers.some((p) => p.instrument === inst));
-  const customInstruments = [...new Set(activePlayers.map((p) => p.instrument))].filter((i) => !INSTRUMENTS.includes(i));
+  
+  // 🌟 BULLETPROOF INSTRUMENT MAPPING (Just like the Matrix!)
+  const existingInstruments = Array.from(new Set(players.map(p => p.instrument)));
+  const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments])).filter(inst => activePlayers.some(p => p.instrument === inst));
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Inter', Arial, sans-serif" }}>
-      <div style={{ background: '#1e3a5f', padding: '24px 32px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <Music size={24} color="white" />
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ background: '#1e3a5f', padding: '24px 32px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+        <div style={{ backgroundColor: '#eab308', padding: '8px', borderRadius: '8px', display: 'flex' }}>
+          <Music size={24} color="#1e3a5f" />
+        </div>
         <div>
           <h1 style={{ color: 'white', margin: 0, fontSize: '20px', fontWeight: 700 }}>{bandName || 'Band Schedule'}</h1>
-          <p style={{ color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontSize: '13px' }}>Read-only availability matrix</p>
+          <p style={{ color: '#93c5fd', margin: '2px 0 0', fontSize: '13px' }}>Read-only availability matrix</p>
         </div>
       </div>
 
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 16px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '80px', color: '#6b7280', fontSize: '15px' }}>Loading…</div>
+          <div style={{ textAlign: 'center', padding: '80px', color: '#64748b', fontSize: '15px' }}>Loading Schedule...</div>
         ) : error ? (
-          <div style={{ textAlign: 'center', padding: '80px', color: '#991b1b' }}>{error}</div>
+          <div style={{ textAlign: 'center', padding: '80px', color: '#991b1b', fontWeight: 600 }}>{error}</div>
         ) : concerts.length === 0 ? (
-          <div style={{ background: 'white', borderRadius: '10px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            <Calendar size={40} color="#d1d5db" style={{ margin: '0 auto 16px' }} />
-            <p style={{ color: '#6b7280', fontSize: '15px' }}>No upcoming concerts scheduled.</p>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+            <Calendar size={40} color="#cbd5e1" style={{ margin: '0 auto 16px' }} />
+            <p style={{ color: '#64748b', fontSize: '15px' }}>No upcoming concerts scheduled.</p>
           </div>
         ) : (
           <>
             {/* Concert cards */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '32px' }}>
               {concerts.map((c) => {
                 const available = availability.filter((a) => a.concert_id === c.id && (a.status === 'Available' || a.status === 'Spare Assigned')).length;
                 const total = activePlayers.length;
                 return (
-                  <div key={c.id} style={{ background: 'white', borderRadius: '10px', padding: '16px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', minWidth: '200px', flex: '1 1 200px' }}>
-                    <h3 style={{ margin: '0 0 8px', fontSize: '14px', fontWeight: 700, color: '#1e3a5f' }}>{c.name}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Calendar size={11} /> {new Date(c.concert_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                  <div key={c.id} style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{c.name}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Calendar size={14} color="#64748b" /> {new Date(c.concert_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock size={11} /> {c.start_time.slice(0, 5)} – {c.end_time.slice(0, 5)}
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={14} color="#64748b" /> {c.start_time.slice(0, 5)} – {c.end_time.slice(0, 5)}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={11} /> {c.location}
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={14} color="#64748b" /> {c.location}
                       </span>
                     </div>
-                    <div style={{ marginTop: '10px', fontSize: '12px', color: '#166534', fontWeight: 600 }}>
-                      <Users size={11} style={{ marginRight: '4px' }} />{available}/{total} available
+                    <div style={{ marginTop: '16px', fontSize: '13px', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', backgroundColor: '#dcfce7', padding: '6px 12px', borderRadius: '6px', width: 'fit-content' }}>
+                      <Users size={14} style={{ marginRight: '6px' }} />{available}/{total} available
                     </div>
                   </div>
                 );
@@ -106,49 +133,43 @@ export default function BandView() {
             </div>
 
             {/* Availability grid */}
-            <div style={{ background: 'white', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: `${180 + concerts.length * 130}px` }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#6b7280', borderBottom: '1px solid #e5e7eb', position: 'sticky', left: 0, background: '#f8fafc', minWidth: '160px' }}>Player</th>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '16px', fontWeight: 700, color: '#475569', position: 'sticky', left: 0, background: '#f8fafc', minWidth: '180px', borderRight: '1px solid #e2e8f0', zIndex: 10 }}>Core Musician</th>
                       {concerts.map((c) => (
-                        <th key={c.id} style={{ padding: '12px 10px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#1e3a5f', borderBottom: '1px solid #e5e7eb', minWidth: '120px' }}>
-                          {c.name}<br />
-                          <span style={{ fontWeight: 400, color: '#9ca3af' }}>{new Date(c.concert_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                        <th key={c.id} style={{ padding: '16px', textAlign: 'center', fontWeight: 700, color: '#1e3a5f', borderRight: '1px solid #e2e8f0', minWidth: '160px' }}>
+                          <span style={{ display: 'block' }}>{c.name}</span>
+                          <span style={{ display: 'block', fontWeight: 500, color: '#64748b', fontSize: '12px', marginTop: '4px' }}>{new Date(c.concert_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {[...instrumentOrder, ...customInstruments].map((instrument) => {
+                    {displayInstruments.map((instrument) => {
                       const section = activePlayers.filter((p) => p.instrument === instrument);
                       if (section.length === 0) return null;
                       return [
                         <tr key={`header-${instrument}`}>
-                          <td colSpan={concerts.length + 1} style={{ padding: '8px 16px', background: '#f1f5f9', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #e5e7eb' }}>
-                            {instrument} <span style={{ fontWeight: 400, color: '#94a3b8' }}>({section.length})</span>
+                          <td colSpan={concerts.length + 1} style={{ padding: '12px 16px', background: '#f1f5f9', fontSize: '13px', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>
+                            {instrument} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: '6px' }}>({section.length})</span>
                           </td>
                         </tr>,
                         ...section.map((player) => (
                           <tr key={player.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 500, color: '#1f2937', position: 'sticky', left: 0, background: 'white' }}>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', position: 'sticky', left: 0, background: 'white', borderRight: '1px solid #e2e8f0', zIndex: 5 }}>
                               {player.name}
                             </td>
                             {concerts.map((c) => {
                               const avail = getStatus(player.id, c.id);
                               const { label, color } = statusText(avail.status, players, avail.spare_player_id);
                               return (
-                                <td key={c.id} style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                <td key={c.id} style={{ padding: '8px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
                                   <span style={{
-                                    display: 'inline-block',
-                                    background: statusColor(avail.status),
-                                    color,
-                                    fontSize: '11px',
-                                    fontWeight: 600,
-                                    padding: '3px 10px',
-                                    borderRadius: '20px',
-                                    whiteSpace: 'nowrap',
+                                    display: 'inline-block', background: statusColor(avail.status), color,
+                                    fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '6px', whiteSpace: 'nowrap'
                                   }}>{label}</span>
                                 </td>
                               );
@@ -163,15 +184,15 @@ export default function BandView() {
             </div>
 
             {/* Legend */}
-            <div style={{ marginTop: '16px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
                 { bg: '#dcfce7', color: '#166534', label: 'Available' },
                 { bg: '#fee2e2', color: '#991b1b', label: 'Not Available' },
                 { bg: '#fef3c7', color: '#92400e', label: 'Spare Assigned' },
                 { bg: '#f3f4f6', color: '#9ca3af', label: 'Not Responded' },
               ].map(({ bg, color, label }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6b7280' }}>
-                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: bg, border: `1px solid ${color}30` }} />
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#475569' }}>
+                  <span style={{ display: 'inline-block', width: '14px', height: '14px', borderRadius: '4px', background: bg, border: `1px solid ${color}30` }} />
                   {label}
                 </div>
               ))}
@@ -180,8 +201,8 @@ export default function BandView() {
         )}
       </div>
 
-      <div style={{ textAlign: 'center', padding: '24px', color: '#d1d5db', fontSize: '12px' }}>
-        Brassbandwidth — read-only view
+      <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '13px', fontWeight: 500 }}>
+        Brassbandwidth — Live Schedule Sync
       </div>
     </div>
   );

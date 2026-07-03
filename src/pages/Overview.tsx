@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Users, CheckCircle, XCircle, Mail, Send, X } from 'lucide-react';
+import { CalendarDays, Users, CheckCircle, XCircle, Mail, Send, X, LayoutDashboard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Player, Concert } from '../lib/supabase';
 
 export default function Overview() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [concerts, setConcerts] = useState<Concert[]>([]);
-  const [availability, setAvailability] = useState<any[]>([]); // Swapped out strict join type to prevent schema errors
+  const [availability, setAvailability] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [composeOpen, setComposeOpen] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
@@ -19,11 +19,9 @@ export default function Overview() {
   async function fetchData() {
     setLoading(true);
     try {
-      // 1. Who is logged in?
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
 
-      // 2. What is their band ID?
       const { data: band } = await supabase
         .from('bands')
         .select('id')
@@ -35,11 +33,11 @@ export default function Overview() {
         return; 
       }
 
-      // 3. 🌟 STRICT ISOLATION: Fetch only data for THIS band
       const [playersRes, concertsRes, availabilityRes] = await Promise.all([
         supabase.from('players').select('*').eq('band_id', band.id).order('instrument, name'),
         supabase.from('concerts').select('*').eq('band_id', band.id).order('concert_date'),
-        supabase.from('availability').select('*').eq('band_id', band.id), 
+        // 🌟 THE FIX: Removed .eq('band_id') since this join table relies on player_id/concert_id!
+        supabase.from('availability').select('*')
       ]);
 
       if (playersRes.data) setPlayers(playersRes.data as Player[]);
@@ -63,7 +61,6 @@ export default function Overview() {
   async function sendBandEmail(e: React.FormEvent) {
     e.preventDefault();
     
-    // 🌟 Gather the IDs of all active players who actually have an email address
     const targetPlayerIds = activePlayers
       .filter((p) => p.email)
       .map((p) => p.id);
@@ -76,9 +73,9 @@ export default function Overview() {
     setSending(true);
     setComposeOpen(false);
     
-const { error } = await supabase.functions.invoke('send-concert-emails', {
+    const { error } = await supabase.functions.invoke('send-concert-emails', {
       body: { 
-        player_ids: targetPlayerIds, // 🌟 FIXED: Now the mailroom knows who to send it to!
+        player_ids: targetPlayerIds, 
         general: true, 
         subject: emailSubject, 
         message: emailMessage 
@@ -94,7 +91,7 @@ const { error } = await supabase.functions.invoke('send-concert-emails', {
     }
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Command Center...</div>;
 
   const today = new Date().toISOString().split('T')[0];
   const activePlayers = players.filter((p) => p.status === 'Active');
@@ -103,149 +100,217 @@ const { error } = await supabase.functions.invoke('send-concert-emails', {
   const pendingConcerts = concerts.filter((c) => c.status === 'pending');
   const nextConcert = liveConcerts[0] ?? null;
 
+  // 🌟 BULLETPROOF MATH ENGINE
   const liveConcertIds = new Set(liveConcerts.map((c) => c.id));
-  const liveAvailability = availability.filter((a) => liveConcertIds.has(a.concert_id));
-  const respondedCount = liveAvailability.filter((a) => a.status !== 'Not Responded').length;
-  const totalSlots = liveAvailability.length || 1;
-  const responseRate = Math.round((respondedCount / totalSlots) * 100);
-  const availableCount = liveAvailability.filter((a) => a.status === 'Available' || a.status === 'Spare Assigned').length;
-  const notRespondedCount = liveAvailability.filter((a) => a.status === 'Not Responded').length;
+  const activePlayerIds = new Set(activePlayers.map((p) => p.id));
+  
+  // Total expected responses = Every core player x Every live gig
+  const totalExpectedResponses = activePlayers.length * liveConcerts.length;
+
+  // 🌟 THE FIX: Count ANY valid state that isn't "Not Responded" for a core chair
+  const respondedCount = availability.filter(
+    (a) => liveConcertIds.has(a.concert_id) && 
+           activePlayerIds.has(a.player_id) && 
+           a.status !== 'Not Responded'
+  ).length;
+
+  let responseRate = 0;
+  if (totalExpectedResponses > 0) {
+    responseRate = Math.round((respondedCount / totalExpectedResponses) * 100);
+    if (responseRate > 100) responseRate = 100; // Safeguard limit
+  }
+
+  // True Pending Responses: Expected minus what we actually have
+  const truePendingResponses = totalExpectedResponses > 0 ? (totalExpectedResponses - respondedCount) : 0;
+
+  // Total Available Count (Core players + Assigned Spares)
+  const availableCount = availability.filter(
+    (a) => liveConcertIds.has(a.concert_id) && 
+           (a.status === 'Available' || a.status === 'Spare Assigned')
+  ).length;
+
   const playersWithEmail = activePlayers.filter((p) => p.email).length;
 
   return (
-    <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1>Dashboard Overview</h1>
-          <p>Welcome to Brassbandwidth — your brass band management hub</p>
+    <div style={{ padding: '32px', fontFamily: 'system-ui, sans-serif', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
+      
+      {/* 🌟 UNIFIED MASTER PAGE HEADER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <LayoutDashboard size={36} color="#1e3a5f" />
+          <div>
+            <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Dashboard</h1>
+            <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' }}>Real-time overview of metrics and operations status configurations.</p>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={openCompose} disabled={sending}>
+        <button 
+          onClick={openCompose} 
+          disabled={sending}
+          style={{ padding: '10px 16px', backgroundColor: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: sending ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'opacity 0.2s', opacity: sending ? 0.7 : 1 }}
+        >
           <Mail size={18} /> {sending ? 'Sending…' : 'Email the Band'}
         </button>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon primary"><Users size={20} /></div>
-          <div className="stat-value">{activePlayers.length}</div>
-          <div className="stat-label">Active Players</div>
+      {/* 🌟 UNIFIED STATS GRID */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+        
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Users size={20} color="#3b82f6" />
+          </div>
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{activePlayers.length}</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', marginTop: '6px' }}>Active Core Players</div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon secondary"><Users size={20} /></div>
-          <div className="stat-value">{sparePlayers.length}</div>
-          <div className="stat-label">Spare Players</div>
+
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Users size={20} color="#8b5cf6" />
+          </div>
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{sparePlayers.length}</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', marginTop: '6px' }}>Local Band Spares</div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon success"><CalendarDays size={20} /></div>
-          <div className="stat-value">{liveConcerts.length}</div>
-          <div className="stat-label">Live Concerts</div>
+
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CalendarDays size={20} color="#10b981" />
+          </div>
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{liveConcerts.length}</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', marginTop: '6px' }}>Live Concerts</div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon warning"><CheckCircle size={20} /></div>
-          <div className="stat-value">{liveAvailability.length > 0 ? `${responseRate}%` : '—'}</div>
-          <div className="stat-label">Response Rate</div>
+
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CheckCircle size={20} color="#ef4444" />
+          </div>
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+              {totalExpectedResponses > 0 ? `${responseRate}%` : '—'}
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b', marginTop: '6px' }}>Response Rate</div>
+          </div>
         </div>
+
       </div>
 
-      <div className="stats-grid">
-        <div className="card">
-          <div className="card-header"><h2>Next Live Concert</h2></div>
-          <div className="card-body">
+      {/* LOWER DATA GRIDS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+        
+        {/* Next Concert Card */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Next Live Concert</h2>
+          </div>
+          <div style={{ padding: '20px' }}>
             {nextConcert ? (
               <div>
-                <h3 style={{ marginBottom: '8px' }}>{nextConcert.name}</h3>
-                <p style={{ color: 'var(--text-light)', marginBottom: '4px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1e3a5f', margin: '0 0 8px 0' }}>{nextConcert.name}</h3>
+                <p style={{ color: '#475569', fontSize: '14px', margin: '0 0 4px 0' }}>
                   {new Date(nextConcert.concert_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
-                <p style={{ color: 'var(--text-light)', marginBottom: '4px' }}>{nextConcert.start_time.slice(0, 5)} – {nextConcert.end_time.slice(0, 5)}</p>
-                <p style={{ color: 'var(--text-light)', marginBottom: '16px' }}>{nextConcert.location}</p>
+                <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 4px 0' }}>{nextConcert.start_time.slice(0, 5)} – {nextConcert.end_time.slice(0, 5)}</p>
+                <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 20px 0' }}>{nextConcert.location}</p>
                 
-                {/* Updated Layout Badge block to show Available, Not Available, and Spares cleanly */}
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <div className="status-badge availability-available">
-                    <CheckCircle size={14} style={{ marginRight: '4px' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', padding: '6px 12px', borderRadius: '20px' }}>
+                    <CheckCircle size={14} />
                     {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Available').length} Available
                   </div>
-                  <div className="status-badge availability-not-available">
-                    <XCircle size={14} style={{ marginRight: '4px' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#fef2f2', color: '#991b1b', padding: '6px 12px', borderRadius: '20px' }}>
+                    <XCircle size={14} />
                     {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Not Available').length} Not Available
                   </div>
-                  <div className="status-badge" style={{ backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #ffedd5', display: 'flex', alignItems: 'center' }}>
-                    <Users size={14} style={{ marginRight: '4px' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff7ed', color: '#c2410c', padding: '6px 12px', borderRadius: '20px', border: '1px solid #ffedd5' }}>
+                    <Users size={14} />
                     {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Spare Assigned').length} Spares Assigned
                   </div>
                 </div>
               </div>
             ) : (
-              <p style={{ color: 'var(--text-light)' }}>No live upcoming concerts scheduled</p>
+              <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic', margin: 0 }}>No live upcoming concerts scheduled</p>
             )}
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header"><h2>Concert Status</h2></div>
-          <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Live Concerts</span>
-                <strong style={{ color: 'var(--success-text)' }}>{liveConcerts.length}</strong>
+        {/* Concert Status Card */}
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Concert Status</h2>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Live Concerts</span>
+                <strong style={{ color: '#166534', fontSize: '16px' }}>{liveConcerts.length}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Pending (Not Published)</span>
-                <strong style={{ color: 'var(--warning-text)' }}>{pendingConcerts.length}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Pending (Not Published)</span>
+                <strong style={{ color: '#ca8a04', fontSize: '16px' }}>{pendingConcerts.length}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Confirmed Available</span>
-                <strong style={{ color: 'var(--success-text)' }}>{availableCount}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Confirmed Available</span>
+                <strong style={{ color: '#166534', fontSize: '16px' }}>{availableCount}</strong>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Pending Responses</span>
-                <strong style={{ color: 'var(--warning-text)' }}>{notRespondedCount}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Pending Responses</span>
+                <strong style={{ color: '#c2410c', fontSize: '16px' }}>{truePendingResponses}</strong>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* 🌟 UNIFIED EMAIL MODAL OVERLAY */}
       {composeOpen && (
-        <div className="modal-overlay" onClick={() => setComposeOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Email the Band</h2>
-              <button className="btn-icon" onClick={() => setComposeOpen(false)}><X size={20} /></button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Email the Band</h3>
+              <button type="button" onClick={() => setComposeOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
             </div>
-            <form onSubmit={sendBandEmail}>
-              <div className="modal-body">
-                <p style={{ marginBottom: '16px', color: 'var(--text-light)', fontSize: '13px' }}>
-                  Sending to <strong style={{ color: 'var(--text)' }}>{playersWithEmail}</strong> active players with email addresses.
-                  Upcoming concerts and an availability matrix link will be included automatically.
-                </p>
-                <div className="form-group">
-                  <label>Subject</label>
-                  <input
-                    type="text"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder="e.g., Schedule Update"
-                    required
-                    autoFocus
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Message <span style={{ color: 'var(--text-light)', fontWeight: 400 }}>(optional)</span></label>
-                  <textarea
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    placeholder="Add a personal note to the band…"
-                    rows={8}
-                    style={{ resize: 'vertical', minHeight: '140px' }}
-                  />
-                </div>
+
+            <form onSubmit={sendBandEmail} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '13px', lineHeight: 1.5 }}>
+                Sending to <strong style={{ color: '#0f172a' }}>{playersWithEmail}</strong> active players. Upcoming concerts and an availability matrix link will be included automatically.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Subject</label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="e.g., Schedule Update"
+                  required
+                  autoFocus
+                  style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none' }}
+                />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setComposeOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={!emailSubject.trim()}>
-                  <Send size={16} /> Send to {playersWithEmail} players
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Message <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                <textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  placeholder="Add a personal note to the band…"
+                  rows={6}
+                  style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setComposeOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={!emailSubject.trim() || sending} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: (!emailSubject.trim() || sending) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: (!emailSubject.trim() || sending) ? 0.7 : 1 }}>
+                  <Send size={14} /> Send to {playersWithEmail} players
                 </button>
               </div>
             </form>
@@ -253,7 +318,11 @@ const { error } = await supabase.functions.invoke('send-concert-emails', {
         </div>
       )}
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 10000, fontWeight: 500, fontSize: '14px' }}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
