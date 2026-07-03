@@ -109,8 +109,6 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const configColors = getCellStyle(status);
 
         const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
-        
-        // 🌟 BATCH 4 FIX: Safe fallback lookup using both arrays so name doesn't disappear when assigned!
         const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares].find((p: any) => p.id === avail.spare_player_id) : undefined;
 
         return (
@@ -142,7 +140,6 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#991b1b' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Available'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} /> Not Available</div>
                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Responded'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Not Responded</div>
                   
-                  {/* 🌟 DIRECT ASSIGN / ASK LISTS INTEGRATED INTO DROPDOWN */}
                   <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
                   <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Local Deps ({localSparesList.length})</div>
                   {localSparesList.length > 0 ? localSparesList.map((s: any) => renderDepRow(s, concert.id, cellId, player.id)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None unbooked</div>}
@@ -234,7 +231,6 @@ export default function AvailabilityMatrix() {
 
       if (availabilityRes.data) {
         setAvailability((availabilityRes.data as any[]).map((a) => {
-          // 🌟 BATCH 4 FIX: Ensure Global Spares map into the matrix array correctly when fetched
           const pObj = loadedPlayers.find((p) => p.id === a.player_id) || loadedGlobals.find((s:any) => s.id === a.player_id);
           const cObj = loadedConcerts.find((c) => c.id === a.concert_id);
           return { ...a, id: `${a.player_id}-${a.concert_id}`, player: pObj, concert: cObj, approached_spares: a.approached_spares || [] };
@@ -286,7 +282,6 @@ export default function AvailabilityMatrix() {
       const existing = prev.find((a) => a.player_id === playerId && a.concert_id === concertId);
       if (existing) return prev.map((a) => a.player_id === playerId && a.concert_id === concertId ? { ...a, ...patch } : a);
       
-      // 🌟 BATCH 4 FIX: Ensure assigning Global Spares directly doesn't crash UI Optimistic Update
       const p = players.find((x) => x.id === playerId) || globalSpares.find((x) => x.id === playerId);
       if (!p) return prev; 
 
@@ -353,8 +348,7 @@ export default function AvailabilityMatrix() {
         <button 
           title="Directly assign to gig"
           onClick={() => { 
-             if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spares Contacted' as any, undefined, [s]);
-else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
+             if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
              else onSetStatus(s.id, concertId, 'Available');
              
              if (dropdownId === vacantDropdown) setVacantDropdown(null);
@@ -372,8 +366,8 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
             if (dropdownId === activeDropdown) setActiveDropdown(null);
             setToast(`Sending request to ${s.name}...`);
             
-            if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spares Contacted', undefined, [s]);
-            else onSetStatus(s.id, concertId, 'Spares Contacted', undefined, [s]);
+            if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spares Contacted' as any, undefined, [s]);
+            else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
             
             const { error } = await supabase.functions.invoke('send-concert-emails', {
               body: { concert_id: concertId, player_ids: [s.id], is_cascade: true, subject: `Gig Dep Request` }
@@ -442,15 +436,14 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
                         const cellId = `vacant-${instrument}-${c.id}`;
                         const { localS, globalS } = getAvailableSpares(instrument, c);
 
-                        // 🌟 VISUAL UPDATE FIX: Detect if a spare is successfully assigned directly to this vacant chair
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         const fillingSpare = availability.find(a => 
-   a.concert_id === c.id && 
-   (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && 
-   a.player?.instrument === instrument && 
-   a.player?.status === 'Spare' && 
-   !busySpareIds.has(a.player_id)
-);
+                           a.concert_id === c.id && 
+                           (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && 
+                           a.player?.instrument === instrument && 
+                           a.player?.status === 'Spare' && 
+                           !busySpareIds.has(a.player_id)
+                        );
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status);
@@ -461,7 +454,7 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
                                    if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); }
                                    else { setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); }
                                  }}
-                                 style={{ padding: '10px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}
+                                 style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}
                                >
                                  <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} />
                                  <ChevronDown size={14} style={{ opacity: 0.5 }} />
@@ -479,7 +472,6 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
                            )
                         }
 
-                        // If Vacant (no filling spare)
                         return (
                           <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                             <div 
@@ -487,7 +479,7 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
                                 if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); }
                                 else { setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); }
                               }}
-                              style={{ padding: '10px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600, transition: 'all 0.2s' }}
+                              style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600, transition: 'all 0.2s' }}
                               onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
                               onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
                             >
@@ -559,7 +551,6 @@ else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
         </div>
       )}
 
-      {/* QUICK ADD MODAL (Locked to Local Dep) */}
       {addPlayerOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }} onClick={(e) => e.stopPropagation()}>
