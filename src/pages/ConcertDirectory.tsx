@@ -87,11 +87,23 @@ export default function ConcertDirectory() {
     setIsModalOpen(true);
   }
 
+  function isValidUKPostcode(postcode: string): boolean {
+    const regex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+    return regex.test(postcode.trim());
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!bandId) { showToast('❌ Missing Band Profile ID correlation.'); return; }
 
-    const cleanPostcode = formData.postcode.replace(/\s+/g, '').toUpperCase();
+    const rawPostcode = formData.postcode.trim();
+
+    if (rawPostcode && !isValidUKPostcode(rawPostcode)) {
+      showToast('❌ Invalid UK Postcode format. Please check and try again.');
+      return;
+    }
+
+    const cleanPostcode = rawPostcode.replace(/\s+/g, '').toUpperCase();
     let latValue: number | null = null;
     let lngValue: number | null = null;
 
@@ -102,11 +114,15 @@ export default function ConcertDirectory() {
           const geoData = await geoResponse.json();
           latValue = geoData.result.latitude ? parseFloat(geoData.result.latitude) : null;
           lngValue = geoData.result.longitude ? parseFloat(geoData.result.longitude) : null;
+        } else {
+          showToast('❌ Postcode not recognized by GPS registry.');
+          return;
         }
       } catch (err) { console.error("Postcode validation skipped:", err); }
     }
 
-    const fullLocation = formData.postcode ? `${formData.venue_name}, ${formData.postcode.toUpperCase()}` : formData.venue_name;
+    const formattedPostcodeDisplay = rawPostcode.toUpperCase();
+    const fullLocation = formattedPostcodeDisplay ? `${formData.venue_name}, ${formattedPostcodeDisplay}` : formData.venue_name;
     const submissionPayload = { name: formData.name, concert_date: formData.concert_date, start_time: formData.start_time, end_time: formData.end_time, location: fullLocation, latitude: latValue, longitude: lngValue, band_id: bandId };
     
     if (editingConcert) {
@@ -141,6 +157,17 @@ export default function ConcertDirectory() {
       showToast('Concert set to pending');
       await fetchData();
     }
+  }
+
+  // 🌟 NEW FUNCTION: Publish Quietly Without Sending
+  async function publishWithoutEmail(e: React.MouseEvent) {
+    e.preventDefault();
+    if (!publishCompose) return;
+    const { error } = await supabase.from('concerts').update({ status: 'live' }).eq('id', publishCompose.id);
+    if (error) { showToast(`Error publishing concert: ${error.message}`); return; }
+    showToast('Concert published quietly (no emails sent).');
+    setPublishCompose(null);
+    await fetchData();
   }
 
   async function confirmPublish(e: React.FormEvent) {
@@ -218,7 +245,6 @@ export default function ConcertDirectory() {
     const notAvailable = activePlayers.filter((p) => getStatus(p.id, concert.id) === 'Not Available').length;
     const isActionsOpen = activeActions === concert.id;
 
-    // 🌟 Google Calendar Link Generation Logic
     const gcalStartDate = concert.concert_date.replace(/-/g, '');
     const gcalStartTime = concert.start_time.slice(0, 5).replace(':', '') + '00';
     const gcalEndTime = concert.end_time.slice(0, 5).replace(':', '') + '00';
@@ -268,7 +294,6 @@ export default function ConcertDirectory() {
               </div>
             )}
             
-            {/* 🌟 ADDED: Google Calendar Action Button */}
             <a 
               href={gcalUrl}
               target="_blank"
@@ -432,7 +457,7 @@ export default function ConcertDirectory() {
         </div>
       )}
 
-      {/* 🌟 UNIFIED MODALS */}
+      {/* 🌟 MODALS */}
       {actionModal?.type === 'email-confirmed' && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }} onClick={() => setActionModal(null)}>
           <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
@@ -528,10 +553,23 @@ export default function ConcertDirectory() {
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Message <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
                 <textarea value={publishMessage} onChange={(e) => setPublishMessage(e.target.value)} placeholder="Add any extra details for the band…" rows={3} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setPublishCompose(null)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              
+              {/* 🌟 NEW: Added the 'Publish Only (No Email)' option to the footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                <button type="button" onClick={() => setPublishCompose(null)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  onClick={publishWithoutEmail} 
+                  style={{ padding: '8px 16px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }} 
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#cbd5e1'} 
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                >
+                  Publish Only
+                </button>
                 <button type="submit" disabled={!publishSubject.trim()} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: !publishSubject.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Eye size={14} /> Publish &amp; Send
+                  <Send size={14} /> Publish &amp; Send
                 </button>
               </div>
             </form>
@@ -571,7 +609,7 @@ export default function ConcertDirectory() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Venue Postcode</label>
-                <input type="text" value={formData.postcode} onChange={(e) => setFormData({ ...formData, postcode: e.target.value })} placeholder="e.g., ST1 3AD" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+                <input type="text" value={formData.postcode} onChange={(e) => setFormData({ ...formData, postcode: e.target.value })} placeholder="e.g., ST1 3AD" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', textTransform: 'uppercase' }} />
               </div>
               {!editingConcert && (
                 <p style={{ color: '#64748b', fontSize: '12px', margin: 0, fontStyle: 'italic' }}>

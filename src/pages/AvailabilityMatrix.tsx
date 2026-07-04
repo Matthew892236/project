@@ -1,28 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors
-} from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core'; 
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, UserPlus, ChevronDown, Clock, Search, Grid3X3 } from 'lucide-react';
+import { GripVertical, UserPlus, ChevronDown, Clock, Search, Grid3X3, Info, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
 
 const STANDARD_INSTRUMENTS = [
-  "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
+  "Conductor", "Soprano Cornet", "Principal Cornet", "Solo Cornet", "Repiano Cornet",
   "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
   "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
@@ -31,7 +18,7 @@ const STANDARD_INSTRUMENTS = [
 type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
 type AvailabilityCell = Availability & { 
   player: Player; concert: MatrixConcert;
-  approached_spares?: Array<{ id: string; name: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
+  approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
   current_approach_index?: number; approach_initiated_at?: string | null;
 };
 
@@ -78,23 +65,23 @@ function PortalDropdown({ anchorRect, onClose, children }: { anchorRect: DOMRect
     const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
     return () => { clearTimeout(id); document.removeEventListener('mousedown', handleClick); };
   }, [onClose]);
-
-  const left = (window.innerWidth - anchorRect.left) < 280 ? anchorRect.right - 280 : anchorRect.left;
+  const left = (window.innerWidth - anchorRect.left) < 360 ? anchorRect.right - 360 : anchorRect.left;
   return createPortal(
-    <div ref={dropdownRef} style={{ position: 'fixed', top: anchorRect.bottom + 4, left, width: 280, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui' }}>
+    <div ref={dropdownRef} style={{ position: 'absolute', top: anchorRect.bottom + window.scrollY + 4, left, width: 360, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui', display: 'flex', flexDirection: 'column' }}>
       {children}
     </div>, document.body
   );
 }
 
-function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdown, setActiveDropdown, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow }: any) {
+function SortableRow({ player, concerts, allPlayers, globalSpares, myBandId, myBandName, activeDropdown, setActiveDropdown, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.id });
   const rowStyle = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [shortlistSelection, setShortlistSelection] = useState<any[]>([]);
 
   function handleCellClick(e: React.MouseEvent, cellId: string) {
     if (activeDropdown === cellId) { setActiveDropdown(null); setAnchorRect(null); } 
-    else { setAnchorRect((e.currentTarget as HTMLElement).getBoundingClientRect()); setActiveDropdown(cellId); }
+    else { setShortlistSelection([]); setAnchorRect((e.currentTarget as HTMLElement).getBoundingClientRect()); setActiveDropdown(cellId); }
   }
 
   return (
@@ -107,9 +94,9 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const activeQueueIndex = avail?.current_approach_index || 0;
         const cellId = `${player.id}-${concert.id}`;
         const configColors = getCellStyle(status);
-
         const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
         const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares].find((p: any) => p.id === avail.spare_player_id) : undefined;
+        const totalSparesCount = localSparesList.length + globalSparesList.length;
 
         return (
           <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '170px' }}>
@@ -123,9 +110,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                 <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                   {(status as string) === 'Spares Contacted' && avail?.approached_spares && avail.approached_spares.length > 0 && (
                     <div style={{ padding: '12px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#166534', marginBottom: '8px' }}>
-                        <Clock size={14} /> <span>ACTIVE CASCADE SYSTEM</span>
-                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#166534', marginBottom: '8px' }}><Clock size={14} /> <span>ACTIVE EMAIL CASCADE</span></div>
                       {avail.approached_spares.map((spare: any, idx: number) => (
                         <div key={spare.id} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: idx < activeQueueIndex ? '#94a3b8' : '#1e293b', marginBottom: '4px' }}>
                           <span style={{ textDecoration: idx < activeQueueIndex ? 'line-through' : 'none' }}>{idx+1}. {spare.name}</span>
@@ -141,17 +126,50 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Responded'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Not Responded</div>
                   
                   <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
-                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Local Deps ({localSparesList.length})</div>
-                  {localSparesList.length > 0 ? localSparesList.map((s: any) => renderDepRow(s, concert.id, cellId, player.id)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None unbooked</div>}
                   
-                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderTop: '1px solid #e2e8f0', marginTop: '4px' }}>Network Deps ({globalSparesList.length})</div>
-                  {globalSparesList.length > 0 ? globalSparesList.map((s: any) => renderDepRow(s, concert.id, cellId, player.id)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None in range</div>}
+                  {totalSparesCount > 0 && (
+                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <Info size={16} color="#3b82f6" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span style={{ lineHeight: '1.4' }}><strong>How to assign:</strong> Click the checkboxes to build an automated email cascade (up to 3), or click the buttons to action instantly.</span>
+                    </div>
+                  )}
+
+                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Local Deps ({localSparesList.length})</div>
+                  {localSparesList.length > 0 ? localSparesList.map((s: any) => renderDepRow(s, concert.id, cellId, player.id, shortlistSelection, setShortlistSelection)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None unbooked</div>}
+                  
+                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderTop: '1px solid #e2e8f0', marginTop: '4px' }}>Online Network Spares ({globalSparesList.length})</div>
+                  
+                  {/* 🌟 NEW: Error Handling for Missing Postcodes */}
+                  {concert.latitude === null || concert.longitude === null ? (
+                    <div style={{ padding: '8px 12px', margin: '0 12px 8px 12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', fontSize: '11px', color: '#991b1b', display: 'flex', gap: '6px' }}>
+                      <ShieldAlert size={14} style={{ flexShrink: 0 }} />
+                      <span>Postcode missing or invalid. Update the concert location to activate the Dep Radar.</span>
+                    </div>
+                  ) : globalSparesList.length > 0 ? (
+                    globalSparesList.map((s: any) => renderDepRow(s, concert.id, cellId, player.id, shortlistSelection, setShortlistSelection))
+                  ) : (
+                    <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None in range</div>
+                  )}
+                  
+                  <div style={{ height: '1px', background: '#e2e8f0', margin: '0' }} />
+                  <div style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#2563eb', fontWeight: 600 }} onClick={() => { setActiveDropdown(null); onAddPlayer(player.instrument); }}><UserPlus size={16} /> Add new local dep…</div>
                 </div>
 
-                <div style={{ height: '1px', background: '#e2e8f0', margin: '0' }} />
-                <div style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#2563eb', fontWeight: 600 }} onClick={() => { setActiveDropdown(null); onAddPlayer(player.instrument); }}>
-                  <UserPlus size={16} /> Add new local dep…
-                </div>
+                {totalSparesCount > 0 && (
+                  <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: shortlistSelection.length > 0 ? '#0f172a' : '#94a3b8' }}>{shortlistSelection.length}/3 Selected for Email Cascade</span>
+                    <button 
+                      disabled={shortlistSelection.length === 0}
+                      onClick={async () => {
+                        const payloadSelection = [...shortlistSelection];
+                        setActiveDropdown(null);
+                        onSetStatus(player.id, concert.id, 'Spares Contacted' as any, undefined, payloadSelection);
+                        await supabase.functions.invoke('send-concert-emails', { body: { concert_id: concert.id, player_ids: payloadSelection.map(s => s.id), is_cascade: true, subject: `Gig Dep Request from ${myBandName || 'Local Band'}` } });
+                      }}
+                      style={{ padding: '6px 12px', backgroundColor: shortlistSelection.length > 0 ? '#2563eb' : '#e2e8f0', color: shortlistSelection.length > 0 ? '#fff' : '#94a3b8', fontSize: '12px', fontWeight: 600, borderRadius: '4px', border: 'none', cursor: shortlistSelection.length > 0 ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
+                    >Start Email Cascade</button>
+                  </div>
+                )}
               </PortalDropdown>
             )}
           </td>
@@ -167,14 +185,13 @@ export default function AvailabilityMatrix() {
   const [availability, setAvailability] = useState<AvailabilityCell[]>([]);
   const [globalSpares, setGlobalSpares] = useState<any[]>([]); 
   const [myBandId, setMyBandId] = useState<string | null>(null); 
+  const [myBandName, setMyBandName] = useState<string>(''); 
   const [loading, setLoading] = useState(true);
-  
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [vacantDropdown, setVacantDropdown] = useState<string | null>(null);
   const [vacantAnchor, setVacantAnchor] = useState<DOMRect | null>(null);
-  
+  const [vacantShortlist, setVacantShortlist] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
-
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [newPlayerForm, setNewPlayerForm] = useState({ name: '', instrument: '', email: '', phone: '', status: 'Spare' as 'Active' | 'Spare' });
 
@@ -207,18 +224,16 @@ export default function AvailabilityMatrix() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
-
-      const { data: currentBand } = await supabase.from('bands').select('id').eq('manager_id', user.id).maybeSingle();
-      if (!currentBand) { setLoading(false); return; }
-
-      setMyBandId(currentBand.id);
+      if (!user) return setLoading(false);
+      const { data: currentBand } = await supabase.from('bands').select('id, name').eq('manager_id', user.id).maybeSingle();
+      if (!currentBand) return setLoading(false);
+      setMyBandId(currentBand.id); setMyBandName(currentBand.name || 'Local Band');
 
       const [playersRes, concertsRes, availabilityRes, globalSparesRes] = await Promise.all([
         supabase.from('players').select('*').eq('band_id', currentBand.id).order('instrument').order('sort_order').order('name'),
         supabase.from('concerts').select('*').eq('band_id', currentBand.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
         supabase.from('availability').select('*'),
-        supabase.from('players').select('id, name, instrument, band_id, bands ( name, latitude, longitude )').eq('status', 'Spare')
+        supabase.from('players').select('id, name, instrument, status, tags, band_id, latitude, longitude, bands ( name, latitude, longitude )').eq('status', 'Spare')
       ]);
 
       const loadedPlayers = (playersRes.data as Player[]) || [];
@@ -236,7 +251,7 @@ export default function AvailabilityMatrix() {
           return { ...a, id: `${a.player_id}-${a.concert_id}`, player: pObj, concert: cObj, approached_spares: a.approached_spares || [] };
         }).filter(a => a.player && a.concert));
       }
-    } catch (err: any) { console.error("Error populating data matrix:", err.message); } finally { setLoading(false); }
+    } catch (err: any) { console.error("Matrix error:", err.message); } finally { setLoading(false); }
   }
 
   function getAvailability(playerId: string, concertId: string): AvailabilityCell | undefined {
@@ -246,52 +261,73 @@ export default function AvailabilityMatrix() {
   function getAvailableSpares(instrument: string, concert: MatrixConcert) {
     const targetInst = instrument.toLowerCase().trim();
     const busyIds = new Set<string>();
-    
     availability.filter(a => a.concert_id === concert.id).forEach(a => {
       if (a.spare_player_id) busyIds.add(a.spare_player_id);
       if (a.approached_spares) a.approached_spares.forEach((s: any) => busyIds.add(s.id));
     });
 
+    const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn"];
+    const HORNS = ["solo horn", "1st horn", "2nd horn"];
+    const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium"];
+    const TROMBONES = ["1st trombone", "2nd trombone", "bass trombone"];
+    const BASSES = ["eeb bass", "bbb bass"];
+
+    function isMatch(playerInst: string, targInst: string) {
+      if (playerInst === targInst) return true;
+      if (CORNET_FLUGEL.includes(playerInst) && CORNET_FLUGEL.includes(targInst)) return true;
+      if (HORNS.includes(playerInst) && HORNS.includes(targInst)) return true;
+      if (BARI_EUPH.includes(playerInst) && BARI_EUPH.includes(targInst)) return true;
+      if (TROMBONES.includes(playerInst) && TROMBONES.includes(targInst)) return true;
+      if (BASSES.includes(playerInst) && BASSES.includes(targInst)) return true;
+      return false;
+    }
+
+    function playerMatches(p: any, targInst: string) {
+      if (isMatch(p.instrument.toLowerCase().trim(), targInst)) return true;
+      if (p.tags && Array.isArray(p.tags)) {
+        return p.tags.some((tag: string) => isMatch(tag.toLowerCase().trim(), targInst));
+      }
+      return false;
+    }
+
     const localS = players
-      .filter(p => p.instrument.toLowerCase().trim() === targetInst && p.status === 'Spare' && !busyIds.has(p.id))
-      .map(p => ({ id: p.id, name: p.name, distance: 0, band_name: 'Internal Roster', type: 'local' }));
+      .filter(p => playerMatches(p, targetInst) && p.status === 'Spare' && !busyIds.has(p.id))
+      .map(p => ({ id: p.id, name: p.name, instrument: p.instrument, distance: 0, band_name: 'Internal Roster', type: 'local' }));
 
     const globalS = (() => {
       if (concert.latitude === null || concert.longitude === null) return [];
       return globalSpares
-        .filter((s: any) => s.instrument.toLowerCase().trim() === targetInst && s.band_id !== myBandId && !busyIds.has(s.id))
+        .filter((s: any) => playerMatches(s, targetInst) && s.band_id !== myBandId && !busyIds.has(s.id))
         .map((s: any) => {
-          const b = s.bands || s.band;
-          if (b && b.latitude !== null && b.longitude !== null) {
-            const milesAway = calculateDistance(concert.latitude!, concert.longitude!, b.latitude, b.longitude);
-            return { id: s.id, name: s.name, distance: Math.round(milesAway * 10) / 10, band_name: b.name, type: 'global' };
+          const lat = s.latitude || s.bands?.latitude || s.band?.latitude;
+          const lng = s.longitude || s.bands?.longitude || s.band?.longitude;
+          const bandNameLabel = s.band_id ? (s.bands?.name || s.band?.name || 'Network Dep') : 'Independent Dep';
+          if (lat !== null && lng !== null && lat !== undefined && lng !== undefined) {
+            const milesAway = calculateDistance(concert.latitude!, concert.longitude!, lat, lng);
+            return { id: s.id, name: s.name, instrument: s.instrument, distance: Math.round(milesAway * 10) / 10, band_name: bandNameLabel, type: 'global' };
           }
           return null;
         })
         .filter((s: any): s is any => s !== null)
         .sort((a: any, b: any) => a.distance - b.distance);
     })();
-
     return { localS, globalS };
   }
 
   async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[]) {
     const patch = { player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null, approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null };
-    
     setAvailability((prev) => {
       const existing = prev.find((a) => a.player_id === playerId && a.concert_id === concertId);
       if (existing) return prev.map((a) => a.player_id === playerId && a.concert_id === concertId ? { ...a, ...patch } : a);
-      
       const p = players.find((x) => x.id === playerId) || globalSpares.find((x) => x.id === playerId);
       if (!p) return prev; 
-
       const c = concerts.find((x) => x.id === concertId)!;
       return [...prev, { id: `${playerId}-${concertId}`, ...patch, player: p, concert: c, created_at: '', updated_at: '' } as AvailabilityCell];
     });
-
     try {
       const { error } = await supabase.from('availability').upsert(patch, { onConflict: 'player_id,concert_id' });
       if (error) throw error;
+      if (!shortlist) setToast('Status updated configuration sync.');
     } catch { setToast('Error syncing availability.'); await fetchData(); return; }
   }
 
@@ -301,11 +337,9 @@ export default function AvailabilityMatrix() {
     const section = sectionIdentifier === 'Spare' 
       ? players.filter(p => p.status === 'Spare') 
       : players.filter(p => p.instrument === sectionIdentifier && p.status === 'Active');
-      
     const oldIdx = section.findIndex((p) => p.id === active.id);
     const newIdx = section.findIndex((p) => p.id === over.id);
     if (oldIdx === -1 || newIdx === -1) return;
-    
     const reordered = arrayMove(section, oldIdx, newIdx);
     setPlayers((prev) => {
       const others = sectionIdentifier === 'Spare' 
@@ -318,70 +352,80 @@ export default function AvailabilityMatrix() {
 
   async function saveNewPlayer(e: React.FormEvent) {
     e.preventDefault();
-    if (!newPlayerForm.instrument) { setToast('Please select an instrument'); return; }
-    if (!newPlayerForm.email) { setToast('Please provide an email address'); return; }
-    
+    if (!newPlayerForm.instrument) return setToast('Please select an instrument');
+    if (!newPlayerForm.email) return setToast('Please provide an email address');
     const cleanEmail = newPlayerForm.email.toLowerCase().trim();
-
     if (newPlayerForm.status === 'Spare') {
       const { data: existingSpare } = await supabase.from('players').select('id, name').eq('email', cleanEmail).eq('status', 'Spare').maybeSingle();
       if (existingSpare) { setToast(`${existingSpare.name} is already registered on the network!`); setAddPlayerOpen(false); return; }
     }
-
-    const { data: inserted, error = null } = await supabase.from('players').insert({ 
-      name: newPlayerForm.name, instrument: newPlayerForm.instrument, email: cleanEmail, phone: newPlayerForm.phone || null, status: newPlayerForm.status, band_id: myBandId, tags: [] 
-    }).select().single();
-    
-    if (error || !inserted) { setToast('Error adding player'); return; }
+    const { data: inserted, error = null } = await supabase.from('players').insert({ name: newPlayerForm.name, instrument: newPlayerForm.instrument, email: cleanEmail, phone: newPlayerForm.phone || null, status: newPlayerForm.status, band_id: myBandId, tags: [] }).select().single();
+    if (error || !inserted) return setToast('Error adding player');
     if (concerts.length > 0) await supabase.from('availability').insert(concerts.map((c) => ({ player_id: inserted.id, concert_id: c.id, status: 'Not Responded' as AvailabilityStatus })));
     setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
   }
 
-  // 🌟 THE UNIFIED ACTION ENGINE FOR DEPS
-  const renderDepRow = (s: any, concertId: string, dropdownId: string, targetCorePlayerId?: string) => (
-    <div key={s.id} style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{s.name}</span>
-        <span style={{ fontSize: '11px', color: '#64748b' }}>{s.type === 'global' ? `${s.distance} mi away` : 'Local Dep'}</span>
-      </div>
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <button 
-          title="Directly assign to gig"
-          onClick={() => { 
-             if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
-             else onSetStatus(s.id, concertId, 'Available');
-             
-             if (dropdownId === vacantDropdown) setVacantDropdown(null);
-             if (dropdownId === activeDropdown) setActiveDropdown(null);
-             setToast(`${s.name} assigned.`); 
-          }}
-          style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-        >
-          Assign
-        </button>
-        <button 
-          title="Send email request"
-          onClick={async () => {
-            if (dropdownId === vacantDropdown) setVacantDropdown(null);
-            if (dropdownId === activeDropdown) setActiveDropdown(null);
-            setToast(`Sending request to ${s.name}...`);
-            
-            if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spares Contacted' as any, undefined, [s]);
-            else onSetStatus(s.id, concertId, 'Spares Contacted' as any, undefined, [s]);
-            
-            const { error } = await supabase.functions.invoke('send-concert-emails', {
-              body: { concert_id: concertId, player_ids: [s.id], is_cascade: true, subject: `Gig Dep Request` }
+  const renderDepRow = (s: any, concertId: string, dropdownId: string, targetCorePlayerId: string | undefined, currentShortlist: any[], setShortlist: any) => {
+    const rIdx = currentShortlist.findIndex((item: any) => item.id === s.id);
+    const isRanked = rIdx !== -1;
+
+    return (
+      <div 
+        key={s.id} 
+        style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isRanked ? '#eff6ff' : 'transparent', transition: 'background 0.2s' }}
+      >
+        <div 
+          onClick={() => {
+            setShortlist((prev: any[]) => {
+              if (isRanked) return prev.filter((item: any) => item.id !== s.id);
+              if (prev.length >= 3) return prev;
+              return [...prev, s];
             });
-            if(error) setToast(`Error sending request.`);
-            else setToast(`Request sent to ${s.name}!`);
           }}
-          style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, marginRight: '8px', cursor: 'pointer' }}
         >
-          Ask
-        </button>
+          <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isRanked ? '#2563eb' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: isRanked ? '#2563eb' : '#fff', color: '#fff', fontSize: '11px', fontWeight: 'bold', flexShrink: 0, transition: 'all 0.1s' }}>
+            {isRanked ? (rIdx + 1) : ''}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', pointerEvents: 'none' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{s.name}</span>
+            <span style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.3' }}>
+              {s.instrument} {s.type === 'global' ? `(${s.band_name}) • ${s.distance} mi` : '• Local Spare'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button 
+            title="Email this player immediately"
+            onClick={async (e) => { 
+               e.stopPropagation();
+               const anchorId = targetCorePlayerId || s.id;
+               onSetStatus(anchorId, concertId, 'Spares Contacted' as any, undefined, [s]);
+               if (dropdownId === vacantDropdown) setVacantDropdown(null);
+               if (dropdownId === activeDropdown) setActiveDropdown(null);
+               await supabase.functions.invoke('send-concert-emails', { 
+                 body: { concert_id: concertId, player_ids: [s.id], is_cascade: true, subject: `Gig Dep Request from ${myBandName || 'Local Band'}` } 
+               });
+            }}
+            style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >Email</button>
+
+          <button 
+            title="Directly assign to gig"
+            onClick={(e) => { 
+               e.stopPropagation();
+               if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
+               else onSetStatus(s.id, concertId, 'Available');
+               if (dropdownId === vacantDropdown) setVacantDropdown(null);
+               if (dropdownId === activeDropdown) setActiveDropdown(null);
+            }}
+            style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >Assign</button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Availability Data...</div>;
 
@@ -392,7 +436,6 @@ export default function AvailabilityMatrix() {
 
   return (
     <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
-      
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
         <Grid3X3 size={36} color="#1e3a5f" />
         <div>
@@ -421,10 +464,8 @@ export default function AvailabilityMatrix() {
               </tr>
             </thead>
             <tbody>
-              
               {displayInstruments.map((instrument) => {
                 const section = activePlayers.filter(p => p.instrument === instrument);
-                
                 if (section.length === 0) {
                   return (
                     <tr key={`vacant-${instrument}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -435,73 +476,78 @@ export default function AvailabilityMatrix() {
                       {concerts.map(c => {
                         const cellId = `vacant-${instrument}-${c.id}`;
                         const { localS, globalS } = getAvailableSpares(instrument, c);
-
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
-                        const fillingSpare = availability.find(a => 
-                           a.concert_id === c.id && 
-                           (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && 
-                           a.player?.instrument === instrument && 
-                           a.player?.status === 'Spare' && 
-                           !busySpareIds.has(a.player_id)
-                        );
+                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
+                        const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status);
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                               <div 
-                                 onClick={(e) => { 
-                                   if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); }
-                                   else { setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); }
-                                 }}
-                                 style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}
-                               >
-                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} />
-                                 <ChevronDown size={14} style={{ opacity: 0.5 }} />
+                               <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
+                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
                                </div>
-
                                {vacantDropdown === cellId && vacantAnchor && (
                                  <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
                                    <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Set Status</div>
-                                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(fillingSpare.player_id, c.id, 'Not Responded'); setVacantDropdown(null); }}>
-                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Unassign
-                                   </div>
+                                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(fillingSpare.player_id, c.id, 'Not Responded'); setVacantDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Unassign</div>
                                  </PortalDropdown>
                                )}
                              </td>
                            )
                         }
-
                         return (
                           <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                            <div 
-                              onClick={(e) => { 
-                                if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); }
-                                else { setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); }
-                              }}
-                              style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600, transition: 'all 0.2s' }}
-                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
-                              onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                            >
+                            <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600 }}>
                               <Search size={14} style={{ marginRight: '6px' }} /> Find Dep
                             </div>
-
                             {vacantDropdown === cellId && vacantAnchor && (
                               <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
                                 <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                                  {totalSparesCount > 0 && (
+                                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                      <Info size={16} color="#3b82f6" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                      <span style={{ lineHeight: '1.4' }}><strong>How to assign:</strong> Click the checkboxes to build an automated email cascade (up to 3), or click the buttons to action instantly.</span>
+                                    </div>
+                                  )}
+
                                   <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Local Deps ({localS.length})</div>
-                                  {localS.length > 0 ? localS.map((s: any) => renderDepRow(s, c.id, cellId)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None unbooked</div>}
+                                  {localS.length > 0 ? localS.map((s: any) => renderDepRow(s, c.id, cellId, undefined, vacantShortlist, setVacantShortlist)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None unbooked</div>}
                                   
-                                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderTop: '1px solid #e2e8f0', marginTop: '4px' }}>Network Deps ({globalS.length})</div>
-                                  {globalS.length > 0 ? globalS.map((s: any) => renderDepRow(s, c.id, cellId)) : <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None in range</div>}
+                                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', borderTop: '1px solid #e2e8f0', marginTop: '4px' }}>Online Network Spares ({globalS.length})</div>
+                                  
+                                  {/* 🌟 ERROR HANDLING FOR BAD POSTCODES */}
+                                  {c.latitude === null || c.longitude === null ? (
+                                    <div style={{ padding: '8px 12px', margin: '0 12px 8px 12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', fontSize: '11px', color: '#991b1b', display: 'flex', gap: '6px' }}>
+                                      <ShieldAlert size={14} style={{ flexShrink: 0 }} />
+                                      <span>Postcode missing or invalid. Update the concert location to activate the Dep Radar.</span>
+                                    </div>
+                                  ) : globalS.length > 0 ? (
+                                    globalS.map((s: any) => renderDepRow(s, c.id, cellId, undefined, vacantShortlist, setVacantShortlist))
+                                  ) : (
+                                    <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None in range</div>
+                                  )}
+                                  
+                                  <div style={{ height: '1px', background: '#e2e8f0', margin: 0 }} />
+                                  <div style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#2563eb' }} onClick={() => { setVacantDropdown(null); setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }}><UserPlus size={16} /> + Add New Local Dep</div>
                                 </div>
-                                <div style={{ height: '1px', background: '#e2e8f0', margin: 0 }} />
-                                <div 
-                                  style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#2563eb' }}
-                                  onClick={() => { setVacantDropdown(null); setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }}
-                                >
-                                  <UserPlus size={16} /> + Add New Local Dep
-                                </div>
+
+                                {totalSparesCount > 0 && (
+                                  <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: vacantShortlist.length > 0 ? '#0f172a' : '#94a3b8' }}>{vacantShortlist.length}/3 Selected for Email Cascade</span>
+                                    <button 
+                                      disabled={vacantShortlist.length === 0}
+                                      onClick={async () => {
+                                        const payloadSelection = [...vacantShortlist];
+                                        setVacantDropdown(null);
+                                        const anchorId = payloadSelection[0].id; 
+                                        onSetStatus(anchorId, c.id, 'Spares Contacted' as any, undefined, payloadSelection);
+                                        await supabase.functions.invoke('send-concert-emails', { body: { concert_id: c.id, player_ids: payloadSelection.map(s => s.id), is_cascade: true, subject: `Gig Dep Request from ${myBandName || 'Local Band'}` } });
+                                      }}
+                                      style={{ padding: '6px 12px', backgroundColor: vacantShortlist.length > 0 ? '#2563eb' : '#e2e8f0', color: vacantShortlist.length > 0 ? '#fff' : '#94a3b8', fontSize: '12px', fontWeight: 600, borderRadius: '4px', border: 'none', cursor: vacantShortlist.length > 0 ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}
+                                    >Start Email Cascade</button>
+                                  </div>
+                                )}
                               </PortalDropdown>
                             )}
                           </td>
@@ -510,18 +556,15 @@ export default function AvailabilityMatrix() {
                     </tr>
                   );
                 }
-
                 return (
                   <DndContext key={instrument} sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, instrument)}>
                     <SortableContext items={section.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                       <>
                         <tr>
-                          <td colSpan={concerts.length + 2} style={{ padding: '12px 16px', backgroundColor: '#f1f5f9', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>
-                            {instrument} <span style={{ fontWeight: 500, fontSize: '13px', color: '#64748b', marginLeft: '6px' }}>({section.length})</span>
-                          </td>
+                          <td colSpan={concerts.length + 2} style={{ padding: '12px 16px', backgroundColor: '#f1f5f9', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>{instrument} <span style={{ fontWeight: 500, fontSize: '13px', color: '#64748b', marginLeft: '6px' }}>({section.length})</span></td>
                         </tr>
                         {section.map((player) => (
-                          <SortableRow key={player.id} player={player} concerts={concerts} allPlayers={players} globalSpares={globalSpares} myBandId={myBandId} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} getAvailability={getAvailability} allAvailability={availability} onSetStatus={onSetStatus} onAddPlayer={() => { setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }} getAvailableSpares={getAvailableSpares} renderDepRow={renderDepRow} setToast={setToast} />
+                          <SortableRow key={player.id} player={player} concerts={concerts} allPlayers={players} globalSpares={globalSpares} myBandId={myBandId} myBandName={myBandName} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} getAvailability={getAvailability} onSetStatus={onSetStatus} onAddPlayer={() => { setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }} getAvailableSpares={getAvailableSpares} renderDepRow={renderDepRow} />
                         ))}
                       </>
                     </SortableContext>
@@ -534,18 +577,15 @@ export default function AvailabilityMatrix() {
                   <SortableContext items={sparePlayers.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                     <>
                       <tr>
-                        <td colSpan={concerts.length + 2} style={{ padding: '16px', backgroundColor: '#1e3a5f', fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #e2e8f0', borderTop: '3px solid #e2e8f0', letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '13px' }}>
-                          Local Band Spares / Dep List
-                        </td>
+                        <td colSpan={concerts.length + 2} style={{ padding: '16px', backgroundColor: '#1e3a5f', fontWeight: 700, color: '#ffffff', borderBottom: '1px solid #e2e8f0', borderTop: '3px solid #e2e8f0', letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '13px' }}>Local Band Spares / Dep List</td>
                       </tr>
                       {sparePlayers.map((player) => (
-                        <SortableRow key={player.id} player={player} concerts={concerts} allPlayers={players} globalSpares={globalSpares} myBandId={myBandId} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} getAvailability={getAvailability} allAvailability={availability} onSetStatus={onSetStatus} onAddPlayer={() => { setNewPlayerForm({ name: '', instrument: player.instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }} getAvailableSpares={getAvailableSpares} renderDepRow={renderDepRow} setToast={setToast} />
+                        <SortableRow key={player.id} player={player} concerts={concerts} allPlayers={players} globalSpares={globalSpares} myBandId={myBandId} myBandName={myBandName} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} getAvailability={getAvailability} onSetStatus={onSetStatus} onAddPlayer={() => { setNewPlayerForm({ name: '', instrument: player.instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }} getAvailableSpares={getAvailableSpares} renderDepRow={renderDepRow} />
                       ))}
                     </>
                   </SortableContext>
                 </DndContext>
               )}
-
             </tbody>
           </table>
         </div>
@@ -553,18 +593,12 @@ export default function AvailabilityMatrix() {
 
       {addPlayerOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontWeight: 700, color: '#0f172a' }}>Add Local {newPlayerForm.instrument} Dep</h3>
             <form onSubmit={saveNewPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <input type="text" value={newPlayerForm.name} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, name: e.target.value })} placeholder="Full Name" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              
-              <div style={{ padding: '10px 12px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#8b5cf6' }} /> Registering as Local Band Spare (Dep)
-              </div>
-
-              <input type="email" value={newPlayerForm.email} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, email: e.target.value })} placeholder="Email Address (Required for notifications)" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              <input type="email" value={newPlayerForm.email} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, email: e.target.value })} placeholder="Email Address" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
               <input type="tel" value={newPlayerForm.phone} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, phone: e.target.value })} placeholder="Phone Number (Optional)" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                 <button type="button" onClick={() => setAddPlayerOpen(false)} style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                 <button type="submit" style={{ flex: 1, padding: '10px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Save Player</button>
@@ -574,11 +608,7 @@ export default function AvailabilityMatrix() {
         </div>
       )}
       
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 10000, fontWeight: 500 }}>
-          {toast}
-        </div>
-      )}
+      {toast && <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', zIndex: 10000, fontWeight: 500 }}>{toast}</div>}
     </div>
   );
 }

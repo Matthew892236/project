@@ -21,7 +21,14 @@ export default function Login() {
 
     try {
       if (mode === 'signup') {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        // 🌟 FIXED: Added the emailRedirectTo option to force a clickable link instead of a code!
+        const { error: signUpError } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`
+          }
+        });
         if (signUpError) throw signUpError;
         
         setSuccessMessage('Verification link sent! Please check your email inbox to confirm your account.');
@@ -111,7 +118,6 @@ export default function Login() {
           
           <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-light)' }}>
             Need help?{' '}
-            {/* 🌟 FIXED: Now correctly targets your domain admin email! */}
             <a href="mailto:admin@brassbandwidth.com" style={{ color: '#1e3a5f', textDecoration: 'none', fontWeight: 600 }}>
               Contact us
             </a>

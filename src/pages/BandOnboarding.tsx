@@ -6,6 +6,12 @@ type OnboardingProps = {
   onComplete: () => void;
 };
 
+// 🌟 STRICT UK POSTCODE VALIDATOR
+function isValidUKPostcode(postcode: string): boolean {
+  const regex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+  return regex.test(postcode.trim());
+}
+
 export default function BandOnboarding({ onComplete }: OnboardingProps) {
   const [bandName, setBandName] = useState('');
   const [location, setLocation] = useState('');
@@ -27,6 +33,12 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
       return;
     }
 
+    // 🌟 FRONT-DOOR SHIELD: Validate before doing anything else
+    if (!isValidUKPostcode(cleanPostcode)) {
+      setError('Invalid UK Postcode format. Please check the rehearsal postcode and try again.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -40,7 +52,7 @@ export default function BandOnboarding({ onComplete }: OnboardingProps) {
       const geoData = await geoResponse.json();
 
       if (geoData.status !== 200) {
-        throw new Error('We could not find that UK Postcode. Please check it and try again.');
+        throw new Error('We could not find that UK Postcode on the GPS registry. Please check it and try again.');
       }
 
       const exactLat = geoData.result.latitude;
