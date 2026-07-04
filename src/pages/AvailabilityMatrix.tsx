@@ -338,7 +338,7 @@ export default function AvailabilityMatrix() {
       });
     }
 
-    if (status === 'Available') {
+ if (status === 'Available') {
       const waitingCore = availability.find((a) =>
         a.player_id !== playerId &&
         a.concert_id === concertId &&
@@ -351,9 +351,9 @@ export default function AvailabilityMatrix() {
           concert_id: concertId,
           status: 'Spare Assigned',
           spare_player_id: playerId,
-          approached_spares: waitingCore.approached_spares,
-          current_approach_index: waitingCore.current_approach_index,
-          approach_initiated_at: waitingCore.approach_initiated_at
+          approached_spares: waitingCore.approached_spares || [],
+          current_approach_index: waitingCore.current_approach_index ?? 0,
+          approach_initiated_at: waitingCore.approach_initiated_at ?? null
         });
       }
     }
