@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, Trash2, ShieldAlert, CheckCircle, Loader2, Mail, GripVertical, Send, X, Edit, Search, Settings, ChevronUp, ChevronDown, Plus } from 'lucide-react';
+import { Users, Trash2, Loader2, Mail, GripVertical, Send, X, Edit, Search, Settings, ChevronUp, ChevronDown, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core'; 
