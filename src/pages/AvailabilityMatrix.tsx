@@ -73,7 +73,7 @@ function PortalDropdown({ anchorRect, onClose, children }: { anchorRect: DOMRect
   );
 }
 
-function SortableRow({ player, concerts, allPlayers, globalSpares, myBandName, activeDropdown, setActiveDropdown, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow, openCascadeCompose }: any) {
+function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdown, setActiveDropdown, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow, openCascadeCompose }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.id });
   const rowStyle = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
