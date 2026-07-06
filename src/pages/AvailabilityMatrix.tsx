@@ -49,7 +49,7 @@ function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
 function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
   if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
   if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
-  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || 'Covered by Dep'}</span>; 
+  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
   if ((status as string) === 'Spares Contacted' && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;
     const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
@@ -150,7 +150,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                     <div style={{ padding: '4px 16px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>None in range</div>
                   )}
                   
-                  <div style={{ height: '1px', background: '#e2e8f0', margin: '0' }} />
+                  <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
                   <div style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#2563eb', fontWeight: 600 }} onClick={() => { setActiveDropdown(null); onAddPlayer(player.instrument); }}><UserPlus size={16} /> Add new local dep…</div>
                 </div>
 
@@ -198,10 +198,10 @@ export default function AvailabilityMatrix() {
     dropdownIdToClose: string | null;
   } | null>(null);
 
-
-
   const playersRef = useRef<Player[]>([]);
   const concertsRef = useRef<MatrixConcert[]>([]);
+  const globalSparesRef = useRef<any[]>([]); // 🌟 Tracking pointer reference for network spares
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
   useEffect(() => { 
@@ -210,7 +210,9 @@ export default function AvailabilityMatrix() {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const newRow = payload.new as any;
         setAvailability((prev) => {
-          const pObj = playersRef.current.find((p) => p.id === newRow.player_id);
+          // 🔍 Secure Sync Engine lookup: checks core players OR spares registry natively
+          const pObj = playersRef.current.find((p) => p.id === newRow.player_id) ||
+                       globalSparesRef.current.find((s) => s.id === newRow.player_id);
           const cObj = concertsRef.current.find((c) => c.id === newRow.concert_id);
           if (!pObj || !cObj) return prev; 
           const enrichedCell: AvailabilityCell = { ...newRow, id: `${newRow.player_id}-${newRow.concert_id}`, player: pObj, concert: cObj, approached_spares: newRow.approached_spares || [] };
@@ -247,7 +249,7 @@ export default function AvailabilityMatrix() {
 
       setPlayers(loadedPlayers); playersRef.current = loadedPlayers; 
       setConcerts(loadedConcerts); concertsRef.current = loadedConcerts; 
-      setGlobalSpares(loadedGlobals);
+      setGlobalSpares(loadedGlobals); globalSparesRef.current = loadedGlobals;
 
       if (availabilityRes.data) {
         setAvailability((availabilityRes.data as any[]).map((a) => {
@@ -271,7 +273,6 @@ export default function AvailabilityMatrix() {
       if (a.approached_spares) a.approached_spares.forEach((s: any) => busyIds.add(s.id));
     });
 
-    // 🌟 THE EXPANDED WILDCARD ARRAYS
     const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
     const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
     const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
@@ -338,7 +339,7 @@ export default function AvailabilityMatrix() {
       });
     }
 
- if (status === 'Available') {
+    if (status === 'Available') {
       const waitingCore = availability.find((a) =>
         a.player_id !== playerId &&
         a.concert_id === concertId &&
@@ -386,8 +387,6 @@ export default function AvailabilityMatrix() {
 
   function openCascadeCompose(concertId: string, anchorId: string, selectedSpares: any[], dropdownIdToClose: string | null) {
     const concert = concerts.find(c => c.id === concertId);
-   
-   
     setCascadeCompose({
       concertId,
       concertName: concert?.name || 'Concert',
@@ -534,7 +533,9 @@ export default function AvailabilityMatrix() {
                         const cellId = `vacant-${instrument}-${c.id}`;
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
-                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
+                        
+                        // 🌟 Render filter parameter expansion: safely captures and locks 'Spare Assigned' rows natively
+                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
                         const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
@@ -630,59 +631,39 @@ export default function AvailabilityMatrix() {
         </div>
       )}
 
-{cascadeCompose && (
-  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-    <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
-      <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
-      <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
-        Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
-        <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
-      </p>
+      {cascadeCompose && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
+              Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
+              <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
+            </p>
 
-      <form onSubmit={async (e) => {
-        e.preventDefault();
-        
-        // 1. Close open dropdown panels
-        if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
-        if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
-        
-        // 2. Clear out modal state 
-        setCascadeCompose(null);
-        setToast('Starting automated email cascade...');
-        
-        // 3. Update the database row (This single action triggers your database webhook!)
-        await onSetStatus(
-          cascadeCompose.anchorId, 
-          cascadeCompose.concertId, 
-          'Spares Contacted' as any, 
-          undefined, 
-          cascadeCompose.selectedSpares
-        );
-        
-        setToast('Cascade initiated successfully!');
-      }}>
-        
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-          <button 
-            type="button" 
-            onClick={() => setCascadeCompose(null)}
-            style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit"
-            style={{ padding: '8px 16px', borderRadius: '6px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Start Cascade
-          </button>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
+              if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
+              setCascadeCompose(null);
+              setToast('Starting automated email cascade...');
+              
+              await onSetStatus(
+                cascadeCompose.anchorId, 
+                cascadeCompose.concertId, 
+                'Spares Contacted' as any, 
+                undefined, 
+                cascadeCompose.selectedSpares
+              );
+              setToast('Cascade initiated successfully!');
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                <button type="button" onClick={() => setCascadeCompose(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" style={{ padding: '8px 16px', borderRadius: '6px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Start Cascade</button>
+              </div>
+            </form>
+          </div>
         </div>
-
-      </form>
-    </div>
-  </div>
-)}
+      )}
 
       {addPlayerOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
