@@ -422,8 +422,14 @@ export default function AvailabilityMatrix() {
     }
     const { data: inserted, error = null } = await supabase.from('players').insert({ name: newPlayerForm.name, instrument: newPlayerForm.instrument, email: cleanEmail, phone: newPlayerForm.phone || null, status: newPlayerForm.status, band_id: myBandId, tags: [] }).select().single();
     if (error || !inserted) return setToast('Error adding player');
-    if (concerts.length > 0) await supabase.from('availability').insert(concerts.map((c) => ({ player_id: inserted.id, concert_id: c.id, status: 'Not Responded' as AvailabilityStatus })));
-    setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
+// 🛡️ Only generate standard RSVP rows for Active core players!
+if (concerts.length > 0 && newPlayerForm.status === 'Active') {
+  await supabase.from('availability').insert(concerts.map((c) => ({ 
+    player_id: inserted.id, 
+    concert_id: c.id, 
+    status: 'Not Responded' as AvailabilityStatus 
+  })));
+}    setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
   }
 
   const renderDepRow = (s: any, concertId: string, dropdownId: string, targetCorePlayerId: string | undefined, currentShortlist: any[], setShortlist: any) => {

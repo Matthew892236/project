@@ -20,28 +20,38 @@ serve(async (req) => {
 
     const { player_ids, general, subject, message, concert_id } = await req.json();
 
-    if (!player_ids || player_ids.length === 0) {
-      return new Response(JSON.stringify({ error: "No players selected" }), { status: 400, headers: corsHeaders });
-    }
-
-    // Pull targeted player profiles
-    const { data: players } = await supabase
-      .from('players')
-      .select('id, name, email, is_global_spare, band_id') 
-      .in('id', player_ids);
-
-    if (!players || players.length === 0) {
-      return new Response(JSON.stringify({ error: "Players not found" }), { status: 404, headers: corsHeaders });
-    }
-
+    // 1. Fetch Concert Details first so we have the band_id
     let concertDetails = null;
-    if (!general && concert_id) {
+    if (concert_id) {
       const { data: concert } = await supabase
         .from('concerts')
         .select('*')
         .eq('id', concert_id)
         .single();
       concertDetails = concert;
+    }
+
+    let players = [];
+
+    // 🌟 THE FIX: Intelligent Player Routing
+    if (player_ids && player_ids.length > 0) {
+      // Manual list provided (e.g., Chase Non-Responders or Send Confirmed)
+      const { data } = await supabase.from('players').select('*').in('id', player_ids);
+      if (data) players = data;
+    } else if (concertDetails?.band_id) {
+      // New Concert Publish: Grab ONLY Active Core Members!
+      const { data } = await supabase
+        .from('players')
+        .select('*')
+        .eq('band_id', concertDetails.band_id)
+        .eq('status', 'Active'); // 🛡️ Spares are completely ignored here!
+      if (data) players = data;
+    } else {
+      return new Response(JSON.stringify({ error: "No players selected and no band context found." }), { status: 400, headers: corsHeaders });
+    }
+
+    if (!players || players.length === 0) {
+      return new Response(JSON.stringify({ error: "Players not found" }), { status: 404, headers: corsHeaders });
     }
 
     // 🌟 RESOLVE SENDER IDENTITY & REPLY-TO ROUTING
@@ -64,7 +74,6 @@ serve(async (req) => {
       if (bandData) {
         bandName = bandData.name || "Band Manager";
         if (bandData.manager_id) {
-          // Use service role authority to fetch the manager's account email address
           const { data: authUser } = await supabase.auth.admin.getUserById(bandData.manager_id);
           if (authUser?.user?.email) {
             replyToEmail = authUser.user.email;
@@ -91,8 +100,9 @@ serve(async (req) => {
       `;
 
       if (!general && concertDetails) {
-        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-accept`;
-        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-decline`;
+        // Cache-busting timestamps added to core player links just in case!
+        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-accept&t=${Date.now()}`;
+        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-decline&t=${Date.now()}`;
 
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
@@ -113,7 +123,7 @@ serve(async (req) => {
       `;
 
       if (!player.is_global_spare) {
-        const globalNetworkLink = `${BASE_URL}?player_id=${player.id}&action=join-network`;
+        const globalNetworkLink = `${BASE_URL}?player_id=${player.id}&action=join-network&t=${Date.now()}`;
         htmlBody += `
             <p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">
               Want more playing opportunities outside the band? <br/>
@@ -127,7 +137,6 @@ serve(async (req) => {
         </div>
       `;
 
-      // Dispatch via Resend API
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -135,8 +144,8 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-from: `"${bandName}" <Admin@brassbandwidth.com>`,
-          reply_to: replyToEmail,                         // 🌟 Routed back to manager email address!
+          from: `"${bandName}" <Admin@brassbandwidth.com>`,
+          reply_to: replyToEmail,
           to: player.email,
           subject: subject,
           html: htmlBody,
