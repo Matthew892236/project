@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// 🌐 Using esm.sh avoids Node/JSR compilation issues completely in Deno!
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const htmlTemplate = (title: string, message: string, isSuccess: boolean) => `
@@ -34,6 +33,12 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
+  // 🛡️ PLAIN OBJECT HEADERS: Deno cannot strip or ignore this format!
+  const htmlHeaders = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate"
+  };
+
   try {
     const url = new URL(req.url);
     const player_id = url.searchParams.get('player_id') || url.searchParams.get('playerId');
@@ -41,52 +46,41 @@ Deno.serve(async (req) => {
     const spare_id = url.searchParams.get('spare_id') || url.searchParams.get('spareId');
     const action = url.searchParams.get('action');
 
-    // 🌟 ACTION 1: DE-P JOINS GLOBAL NETWORK
     if (action === 'join-network' && player_id) {
       await supabase.from('players').update({ status: 'Spare' }).eq('id', player_id);
-      return new Response(htmlTemplate("Welcome!", "You are now opted into the Global Spares roster.", true), { headers: { "Content-Type": "text/html" } });
+      return new Response(htmlTemplate("Welcome!", "You are now opted into the Global Spares roster.", true), { status: 200, headers: htmlHeaders });
     }
 
     if (!player_id || !concert_id || !spare_id) {
-      return new Response(htmlTemplate("Invalid Link", "This link is missing parameters.", false), { headers: { "Content-Type": "text/html" } });
+      return new Response(htmlTemplate("Invalid Link", "This response link appears incomplete or broken.", false), { status: 400, headers: htmlHeaders });
     }
 
-    // Fetch availability row
     const { data: currentAvail, error: fetchError } = await supabase
       .from('availability')
       .select('*')
       .match({ player_id, concert_id })
-      .single();
+      .maybeSingle();
 
     if (fetchError || !currentAvail) {
-      return new Response(htmlTemplate("Record Not Found", "We couldn't locate this vacancy row on the matrix.", false), { headers: { "Content-Type": "text/html" } });
+      return new Response(htmlTemplate("Record Not Found", "We couldn't locate this vacancy row on the matrix.", false), { status: 404, headers: htmlHeaders });
     }
 
-    // 🌟 ACTION 2: DEP ACCEPTS GIG
     if (action === 'accept') {
       const { error: updateError } = await supabase
         .from('availability')
         .update({ 
           status: 'Spare Assigned', 
-          spare_player_id: spare_id  // 🔍 If this fails, the error box will tell us why!
+          spare_player_id: spare_id 
         })
         .match({ player_id, concert_id });
 
       if (updateError) {
-        return new Response(
-          htmlTemplate(
-            "Matrix Update Failed", 
-            `The database rejected the acceptance update. <div class="error-box">Database Error: ${updateError.message}</div>`, 
-            false
-          ), 
-          { headers: { "Content-Type": "text/html" } }
-        );
+        return new Response(htmlTemplate("Matrix Update Failed", `The database rejected the assignment. <div class="error-box">Error: ${updateError.message}</div>`, false), { status: 500, headers: htmlHeaders });
       }
 
-      return new Response(htmlTemplate("Gig Accepted!", "Thank you! You have been successfully assigned to this event.", true), { headers: { "Content-Type": "text/html" } });
+      return new Response(htmlTemplate("Gig Accepted!", "Thank you! You have been successfully assigned to this event.", true), { status: 200, headers: htmlHeaders });
     }
 
-    // 🌟 ACTION 3: DEP DECLINES GIG
     if (action === 'decline') {
       const currentIndex = currentAvail.current_approach_index || 0;
       const list = currentAvail.approached_spares || [];
@@ -101,12 +95,12 @@ Deno.serve(async (req) => {
           .match({ player_id, concert_id });
       }
 
-      return new Response(htmlTemplate("Response Recorded", "Thank you. The request has moved on to the next available spare.", true), { headers: { "Content-Type": "text/html" } });
+      return new Response(htmlTemplate("Response Recorded", "Thank you. The request has moved on to the next available spare.", true), { status: 200, headers: htmlHeaders });
     }
 
-    return new Response(htmlTemplate("Unknown Action", "The request action was not recognized.", false), { headers: { "Content-Type": "text/html" } });
+    return new Response(htmlTemplate("Unknown Action", "The request action was not recognized.", false), { status: 400, headers: htmlHeaders });
 
   } catch (err: any) {
-    return new Response(htmlTemplate("Server Error", `An execution error occurred: ${err.message}`, false), { headers: { "Content-Type": "text/html" } });
+    return new Response(htmlTemplate("Server Error", `An execution error occurred: ${err.message}`, false), { status: 500, headers: htmlHeaders });
   }
 });

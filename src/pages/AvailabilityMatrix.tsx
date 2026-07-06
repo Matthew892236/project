@@ -540,8 +540,7 @@ export default function AvailabilityMatrix() {
                            const configColors = getCellStyle(fillingSpare.status);
                            
                            // 🔍 Look up the actual assigned spare from master arrays to prevent placeholder confusion
-                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;
-                           
+const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                           
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                                <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
