@@ -197,8 +197,8 @@ export default function AvailabilityMatrix() {
     anchorId: string;
     dropdownIdToClose: string | null;
   } | null>(null);
-  const [cascadeSubject, setCascadeSubject] = useState('');
-  const [cascadeMessage, setCascadeMessage] = useState('');
+
+
 
   const playersRef = useRef<Player[]>([]);
   const concertsRef = useRef<MatrixConcert[]>([]);
