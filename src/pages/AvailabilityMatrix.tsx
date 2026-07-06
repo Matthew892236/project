@@ -386,8 +386,8 @@ export default function AvailabilityMatrix() {
 
   function openCascadeCompose(concertId: string, anchorId: string, selectedSpares: any[], dropdownIdToClose: string | null) {
     const concert = concerts.find(c => c.id === concertId);
-    setCascadeSubject(`Gig Dep Request: ${concert?.name} - ${myBandName || 'Local Band'}`);
-    setCascadeMessage('');
+   
+   
     setCascadeCompose({
       concertId,
       concertName: concert?.name || 'Concert',
