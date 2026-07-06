@@ -630,65 +630,59 @@ export default function AvailabilityMatrix() {
         </div>
       )}
 
-      {cascadeCompose && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
-            <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
-              Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
-              <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
-            </p>
-   <form onSubmit={async (e) => {
-  e.preventDefault();
-  
-  // 1. Close open dropdown panels
-  if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
-  if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
-  
-  // 2. Clear out modal state 
-  setCascadeCompose(null);
-  setToast('Starting automated email cascade...');
-  
-  // 3. Update the database row
-  await onSetStatus(
-    cascadeCompose.anchorId, 
-    cascadeCompose.concertId, 
-    'Spares Contacted' as any, 
-    undefined, 
-    cascadeCompose.selectedSpares
-  );
-  
-  setToast('Cascade initiated successfully!');
-}}>
-              
-      // ✅ THIS STARTS THE CASCADE WITH JUST PLAYER 1
-await supabase.functions.invoke('send-concert-emails', { 
-  body: { 
-    concert_id: payload.concertId, 
-    player_ids: [payload.playerIds[0]], // 🎯 Wrapping just the first ID in an array!
-    is_cascade: true, 
-    subject: cascadeSubject,
-    message: cascadeMessage
-  } 
-});
-              setToast('Dep requests sent successfully!');
-            }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Subject</label>
-                <input type="text" value={cascadeSubject} onChange={(e) => setCascadeSubject(e.target.value)} required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Extra Details (Optional)</label>
-                <textarea value={cascadeMessage} onChange={(e) => setCascadeMessage(e.target.value)} placeholder="e.g. We will pay expenses, dress code is smart black, rehearsal at 6pm..." rows={4} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setCascadeCompose(null)} style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-                <button type="submit" disabled={!cascadeSubject.trim()} style={{ flex: 1, padding: '10px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, opacity: !cascadeSubject.trim() ? 0.7 : 1 }}>Send Requests</button>
-              </div>
-            </form>
-          </div>
+{cascadeCompose && (
+  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+    <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+      <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
+      <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
+        Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
+        <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
+      </p>
+
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        
+        // 1. Close open dropdown panels
+        if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
+        if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
+        
+        // 2. Clear out modal state 
+        setCascadeCompose(null);
+        setToast('Starting automated email cascade...');
+        
+        // 3. Update the database row (This single action triggers your database webhook!)
+        await onSetStatus(
+          cascadeCompose.anchorId, 
+          cascadeCompose.concertId, 
+          'Spares Contacted' as any, 
+          undefined, 
+          cascadeCompose.selectedSpares
+        );
+        
+        setToast('Cascade initiated successfully!');
+      }}>
+        
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+          <button 
+            type="button" 
+            onClick={() => setCascadeCompose(null)}
+            style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit"
+            style={{ padding: '8px 16px', borderRadius: '6px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Start Cascade
+          </button>
         </div>
-      )}
+
+      </form>
+    </div>
+  </div>
+)}
 
       {addPlayerOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
