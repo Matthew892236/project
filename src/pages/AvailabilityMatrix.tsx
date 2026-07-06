@@ -200,7 +200,7 @@ export default function AvailabilityMatrix() {
 
   const playersRef = useRef<Player[]>([]);
   const concertsRef = useRef<MatrixConcert[]>([]);
-  const globalSparesRef = useRef<any[]>([]); // 🌟 Tracking pointer reference for network spares
+  const globalSparesRef = useRef<any[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
@@ -210,7 +210,6 @@ export default function AvailabilityMatrix() {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const newRow = payload.new as any;
         setAvailability((prev) => {
-          // 🔍 Secure Sync Engine lookup: checks core players OR spares registry natively
           const pObj = playersRef.current.find((p) => p.id === newRow.player_id) ||
                        globalSparesRef.current.find((s) => s.id === newRow.player_id);
           const cObj = concertsRef.current.find((c) => c.id === newRow.concert_id);
@@ -534,16 +533,20 @@ export default function AvailabilityMatrix() {
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
-                        // 🌟 Render filter parameter expansion: safely captures and locks 'Spare Assigned' rows natively
                         const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
                         const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status);
+                           
+                           // 🔍 Look up the actual assigned spare from master arrays to prevent placeholder confusion
+                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;
+                           
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                                <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
-                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
+                                 {/* 🌟 Pass actual spareName down to guarantee Player 2 renders beautifully on acceptance */}
+                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} spareName={sparePlayer?.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
                                </div>
                                {vacantDropdown === cellId && vacantAnchor && (
                                  <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
