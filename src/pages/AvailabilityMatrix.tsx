@@ -650,15 +650,16 @@ export default function AvailabilityMatrix() {
               setCascadeCompose(null);
               setToast('Sending dep requests...');
               
-              await supabase.functions.invoke('send-concert-emails', { 
-                 body: { 
-                   concert_id: payload.concertId, 
-                   player_ids: payload.playerIds, 
-                   is_cascade: true, 
-                   subject: cascadeSubject,
-                   message: cascadeMessage
-                 } 
-              });
+      // ✅ THIS STARTS THE CASCADE WITH JUST PLAYER 1
+await supabase.functions.invoke('send-concert-emails', { 
+  body: { 
+    concert_id: payload.concertId, 
+    player_ids: [payload.playerIds[0]], // 🎯 Wrapping just the first ID in an array!
+    is_cascade: true, 
+    subject: cascadeSubject,
+    message: cascadeMessage
+  } 
+});
               setToast('Dep requests sent successfully!');
             }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

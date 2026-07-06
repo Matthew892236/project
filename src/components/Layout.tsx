@@ -44,21 +44,22 @@ export default function Layout() {
       {/* 🌟 INJECTED CSS: This handles all the mobile responsive magic automatically! */}
       <style>{`
         .layout-container { display: flex; min-height: 100vh; background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; flex-direction: column; }
-        .sidebar { width: 260px; background-color: #1e3a5f; display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; box-shadow: 2px 0 12px rgba(0,0,0,0.1); transition: transform 0.3s ease; }
+        .main-content { flex: 1; padding-left: 260px; height: 100vh; overflow-y: auto; box-sizing: border-box; }
         .main-content { flex: 1; padding-left: 260px; height: 100vh; overflow-y: auto; box-sizing: border-box; }
         .mobile-header { display: none; }
         .mobile-overlay { display: none; }
         .mobile-close-btn { display: none; }
 
         /* Mobile Adjustments (Screens smaller than 768px) */
-        @media (max-width: 768px) {
-          .sidebar { transform: translateX(-100%); }
-          .sidebar.open { transform: translateX(0); }
-          .main-content { padding-left: 0; padding-top: 64px; } 
-          .mobile-header { display: flex; position: fixed; top: 0; left: 0; right: 0; height: 64px; background-color: #1e3a5f; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-          .mobile-overlay.open { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); z-index: 45; backdrop-filter: blur(2px); }
-          .mobile-close-btn { display: block; position: absolute; top: 24px; right: 20px; background: none; border: none; color: #93c5fd; cursor: pointer; padding: 4px; }
-        }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  /* 🌟 THE FIX: Force padding-left to 0 on mobile */
+  .main-content { padding-left: 0 !important; padding-top: 64px !important; } 
+  .mobile-header { display: flex; position: fixed; top: 0; left: 0; right: 0; height: 64px; background-color: #1e3a5f; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 40; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  .mobile-overlay.open { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); z-index: 45; backdrop-filter: blur(2px); }
+  .mobile-close-btn { display: block; position: absolute; top: 24px; right: 20px; background: none; border: none; color: #93c5fd; cursor: pointer; padding: 4px; }
+}
       `}</style>
 
       <div className="layout-container">
