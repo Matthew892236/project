@@ -62,7 +62,7 @@ export default function Login() {
           <h1>Brassbandwidth</h1>
           <p>
             {mode === 'login' 
-              ? 'Sign in to manage your band' 
+              ? 'Free Brass Band Management Tool' 
               : mode === 'signup' 
               ? 'Create your band account' 
               : 'Enter your email to receive a recovery link'}

@@ -76,10 +76,13 @@ Deno.serve(async (req) => {
     const PROJECT_ID = "xkwsshbjpevdpvkruqbv";
     const BASE_URL = `https://${PROJECT_ID}.supabase.co/functions/v1/dep-response`;
 
+    // 🌟 LINK FIXES: Accept/Decline update the Core Player's row, Join Network updates the Spare's row!
     const acceptLink = `${BASE_URL}?player_id=${record.player_id}&concert_id=${record.concert_id}&spare_id=${targetSpare.id}&action=accept`;
     const declineLink = `${BASE_URL}?player_id=${record.player_id}&concert_id=${record.concert_id}&spare_id=${targetSpare.id}&action=decline`;
     
-    const globalNetworkLink = "https://yourglobalsparesnetwork.com/join"; 
+    // 🌟 THE FIX: The working Global Network opt-in link using the SPARE's ID!
+    const globalNetworkLink = `${BASE_URL}?player_id=${targetSpare.id}&action=join-network`; 
+    
     const managerMailto = `mailto:${concertDetails?.manager_email || 'Admin@brassbandwidth.com'}?subject=Regarding Gig on ${concertDetails?.date || 'Upcoming'}`;
 
     const emailHtml = `
@@ -105,7 +108,7 @@ Deno.serve(async (req) => {
         <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 14px; color: #475569;">
           <p>💬 Questions? <a href="${managerMailto}" style="color: #3b82f6; text-decoration: underline;">Message the Band Manager</a></p>
           <p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">
-            Want more playing opportunities? <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Would you like to join the community?</a>
+            Want more playing opportunities? <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Would you like to join the Global Spares network?</a>
           </p>
         </div>
       </div>
@@ -118,7 +121,6 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // 🌟 UPDATED: Dynamically injects "[Band Name] Manager" as the sender name
         from: `${bandName} Manager <Admin@brassbandwidth.com>`, 
         to: playerProfile.email,
         subject: `Gig Request: ${bandName}`,

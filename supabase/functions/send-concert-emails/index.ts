@@ -135,7 +135,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: `${bandName} <Admin@brassbandwidth.com>`, // 🌟 Band name in header title!
+from: `"${bandName}" <Admin@brassbandwidth.com>`,
           reply_to: replyToEmail,                         // 🌟 Routed back to manager email address!
           to: player.email,
           subject: subject,

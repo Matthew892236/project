@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Music, Calendar, MapPin, Clock, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-// 🌟 Moved STANDARD_INSTRUMENTS locally to prevent module import errors
+// 🌟 STANDARD_INSTRUMENTS locally to prevent module import errors
 const STANDARD_INSTRUMENTS = [
   "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
   "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
@@ -12,22 +12,50 @@ const STANDARD_INSTRUMENTS = [
 
 type Concert = { id: string; name: string; concert_date: string; start_time: string; end_time: string; location: string };
 type Player = { id: string; name: string; instrument: string; status: string; sort_order: number | null };
-type Availability = { player_id: string; concert_id: string; status: string; spare_player_id: string | null };
 
+// 🌟 UPDATED TYPE: Added the cascade data columns
+type Availability = { 
+  player_id: string; 
+  concert_id: string; 
+  status: string; 
+  spare_player_id: string | null;
+  approached_spares?: any[];
+  current_approach_index?: number;
+};
+
+// 🌟 UPDATED: New Blue and Orange color hex codes
 function statusColor(status: string) {
-  if (status === 'Available') return '#dcfce7';
-  if (status === 'Not Available') return '#fee2e2';
-  if (status === 'Spare Assigned') return '#fef3c7';
-  return '#f3f4f6';
+  if (status === 'Available') return '#dcfce7'; // Light Green
+  if (status === 'Not Available') return '#fee2e2'; // Light Red
+  if (status === 'Spare Assigned') return '#dbeafe'; // Light Blue
+  if (status === 'Spares Contacted') return '#ffedd5'; // Light Orange
+  return '#f3f4f6'; // Gray/White
 }
 
-function statusText(status: string, players: Player[], spareId: string | null) {
-  if (status === 'Available') return { label: 'Available', color: '#166534' };
-  if (status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
-  if (status === 'Spare Assigned') {
-    const spare = players.find((p) => p.id === spareId);
-    return { label: spare ? spare.name : 'Spare', color: '#92400e' };
+// 🌟 UPDATED: Dynamic text rendering based on the whole availability row
+function statusText(avail: Availability, players: Player[]) {
+  if (avail.status === 'Available') return { label: 'Available', color: '#166534' };
+  if (avail.status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
+  
+  if (avail.status === 'Spare Assigned') {
+    // Check local band players first
+    let spareName = players.find((p) => p.id === avail.spare_player_id)?.name;
+    
+    // If they are an external global spare, grab their name from the shortlist!
+    if (!spareName && avail.approached_spares) {
+      const extSpare = avail.approached_spares.find((s: any) => s.id === avail.spare_player_id);
+      if (extSpare) spareName = extSpare.name;
+    }
+    
+    return { label: spareName ? `Spare: ${spareName}` : 'Spare Covered', color: '#1e40af' }; // Dark Blue text
   }
+  
+  if (avail.status === 'Spares Contacted') {
+    const currentIdx = avail.current_approach_index ?? 0;
+    const currentSpare = avail.approached_spares?.[currentIdx];
+    return { label: currentSpare ? `Asked: ${currentSpare.name}` : 'Checking Spares...', color: '#9a3412' }; // Dark Orange text
+  }
+  
   return { label: '—', color: '#9ca3af' };
 }
 
@@ -47,7 +75,6 @@ export default function BandView() {
     fetchPublicData();
   }, [uid]);
 
-  // 🌟 BATCH 5 FIX: Fetching directly instead of using a broken Edge Function
   async function fetchPublicData() {
     try {
       const { data: bandData } = await supabase.from('bands').select('id, name').eq('id', uid).single();
@@ -57,7 +84,8 @@ export default function BandView() {
       const [concertsRes, playersRes, availabilityRes] = await Promise.all([
         supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
         supabase.from('players').select('id, name, instrument, status, sort_order').eq('band_id', bandData.id).order('sort_order'),
-        supabase.from('availability').select('player_id, concert_id, status, spare_player_id')
+        // 🌟 UPDATED FETCH: Added approached_spares and current_approach_index
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
       ]);
 
       setConcerts(concertsRes.data || []);
@@ -77,7 +105,6 @@ export default function BandView() {
 
   const activePlayers = players.filter((p) => p.status === 'Active');
   
-  // 🌟 BULLETPROOF INSTRUMENT MAPPING (Just like the Matrix!)
   const existingInstruments = Array.from(new Set(players.map(p => p.instrument)));
   const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments])).filter(inst => activePlayers.some(p => p.instrument === inst));
 
@@ -164,7 +191,10 @@ export default function BandView() {
                             </td>
                             {concerts.map((c) => {
                               const avail = getStatus(player.id, c.id);
-                              const { label, color } = statusText(avail.status, players, avail.spare_player_id);
+                              
+                              // 🌟 UPDATED: Passing the full 'avail' row to statusText
+                              const { label, color } = statusText(avail, players);
+                              
                               return (
                                 <td key={c.id} style={{ padding: '8px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
                                   <span style={{
@@ -188,7 +218,8 @@ export default function BandView() {
               {[
                 { bg: '#dcfce7', color: '#166534', label: 'Available' },
                 { bg: '#fee2e2', color: '#991b1b', label: 'Not Available' },
-                { bg: '#fef3c7', color: '#92400e', label: 'Spare Assigned' },
+                { bg: '#dbeafe', color: '#1e40af', label: 'Spare Assigned' },
+                { bg: '#ffedd5', color: '#9a3412', label: 'Spares Contacted' },
                 { bg: '#f3f4f6', color: '#9ca3af', label: 'Not Responded' },
               ].map(({ bg, color, label }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#475569' }}>
