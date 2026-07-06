@@ -638,17 +638,29 @@ export default function AvailabilityMatrix() {
               Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              
-              if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
-              if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
-              
-              onSetStatus(cascadeCompose.anchorId, cascadeCompose.concertId, 'Spares Contacted' as any, undefined, cascadeCompose.selectedSpares);
-              
-              const payload = { ...cascadeCompose };
-              setCascadeCompose(null);
-              setToast('Sending dep requests...');
+   <form onSubmit={async (e) => {
+  e.preventDefault();
+  
+  // 1. Close open dropdown panels
+  if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
+  if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
+  
+  // 2. Clear out modal state 
+  setCascadeCompose(null);
+  setToast('Starting automated email cascade...');
+  
+  // 3. Update the database row. 
+  // 🌟 This single action triggers your backend database webhook automatically!
+  await onSetStatus(
+    cascadeCompose.anchorId, 
+    cascadeCompose.concertId, 
+    'Spares Contacted' as any, 
+    undefined, 
+    cascadeCompose.selectedSpares
+  );
+  
+  setToast('Cascade initiated successfully!');
+}}
               
       // ✅ THIS STARTS THE CASCADE WITH JUST PLAYER 1
 await supabase.functions.invoke('send-concert-emails', { 
