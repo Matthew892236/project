@@ -649,8 +649,7 @@ export default function AvailabilityMatrix() {
   setCascadeCompose(null);
   setToast('Starting automated email cascade...');
   
-  // 3. Update the database row. 
-  // 🌟 This single action triggers your backend database webhook automatically!
+  // 3. Update the database row
   await onSetStatus(
     cascadeCompose.anchorId, 
     cascadeCompose.concertId, 
@@ -660,7 +659,7 @@ export default function AvailabilityMatrix() {
   );
   
   setToast('Cascade initiated successfully!');
-}}
+}}>
               
       // ✅ THIS STARTS THE CASCADE WITH JUST PLAYER 1
 await supabase.functions.invoke('send-concert-emails', { 
