@@ -33,10 +33,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // Pure Blue
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; 
   
-  // 🌟 FIX: Bulletproof fallback catches 'Spares Contacted', 'Deps Contacted', or queue states
-  return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Orange/Yellow Cascade
+  if ((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') {
+    return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; 
+  }
+  return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
 }
 
 function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
@@ -51,7 +53,7 @@ function CellContent({ status, playerName, spareName, approachedList, currentInd
   if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
   if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
   if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
-  if (((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') && approachedList && approachedList.length > 0) {
+  if (((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;
     const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
     return <span style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 700 }}>Asked: {currentActivePlayer.name.split(' ')[0]} ({activeIdx + 1}/{approachedList.length})</span>;
@@ -94,7 +96,8 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const status: AvailabilityStatus = avail?.status || 'Not Responded';
         const activeQueueIndex = avail?.current_approach_index || 0;
         const cellId = `${player.id}-${concert.id}`;
-const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
+        const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        
+        const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
         const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares].find((p: any) => p.id === avail.spare_player_id) : undefined;
         const totalSparesCount = localSparesList.length + globalSparesList.length;
 
@@ -189,7 +192,6 @@ export default function AvailabilityMatrix() {
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [newPlayerForm, setNewPlayerForm] = useState({ name: '', instrument: '', email: '', phone: '', status: 'Spare' as 'Active' | 'Spare' });
 
-  // 🌟 FIX: Added state for the custom message in the cascade email modal
   const [cascadeMessage, setCascadeMessage] = useState('');
   const [cascadeCompose, setCascadeCompose] = useState<{
     concertId: string;
@@ -213,14 +215,13 @@ export default function AvailabilityMatrix() {
       setToast("⚠️ You have already accepted this gig! To back out, you must contact the Band Manager directly.");
     }
     if (params.get('status') === 'welcome') {
-      setToast("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
+      setToast("🎺 Thank you for adding your name to help the band community!");
     }
     const channel = supabase.channel('matrix-realtime-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'availability' }, (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const newRow = payload.new as any;
         setAvailability((prev) => {
-          const pObj = playersRef.current.find((p) => p.id === newRow.player_id) ||
-                       globalSparesRef.current.find((s) => s.id === newRow.player_id);
+          const pObj = playersRef.current.find((p) => p.id === newRow.player_id) || globalSparesRef.current.find((s) => s.id === newRow.player_id);
           const cObj = concertsRef.current.find((c) => c.id === newRow.concert_id);
           if (!pObj || !cObj) return prev; 
           const enrichedCell: AvailabilityCell = { ...newRow, id: `${newRow.player_id}-${newRow.concert_id}`, player: pObj, concert: cObj, approached_spares: newRow.approached_spares || [] };
@@ -277,7 +278,6 @@ export default function AvailabilityMatrix() {
     const targetInst = instrument.toLowerCase().trim();
     const busyIds = new Set<string>();
     
-    // 🌟 FIX: Aggressively filter out spares if they are already assigned, emailed, or manually confirmed
     availability.filter(a => a.concert_id === concert.id).forEach(a => {
       if (a.spare_player_id) busyIds.add(a.spare_player_id);
       if (a.approached_spares) a.approached_spares.forEach((s: any) => busyIds.add(s.id));
@@ -306,9 +306,7 @@ export default function AvailabilityMatrix() {
 
     function playerMatches(p: any, targInst: string) {
       if (isMatch(p.instrument.toLowerCase().trim(), targInst)) return true;
-      if (p.tags && Array.isArray(p.tags)) {
-        return p.tags.some((tag: string) => isMatch(tag.toLowerCase().trim(), targInst));
-      }
+      if (p.tags && Array.isArray(p.tags)) return p.tags.some((tag: string) => isMatch(tag.toLowerCase().trim(), targInst));
       return false;
     }
 
@@ -337,41 +335,21 @@ export default function AvailabilityMatrix() {
   }
 
   async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[], customMessage?: string) {
-    // Note: customMessage is patched to the db if needed, or intercepted by Edge Functions
     const patch = { player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null, approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null, custom_message: customMessage || null };
     const patches = [patch];
 
     if (status === 'Spare Assigned' && spareId) {
-      patches.push({
-        player_id: spareId,
-        concert_id: concertId,
-        status: 'Available',
-        spare_player_id: null,
-        approached_spares: [],
-        current_approach_index: 0,
-        approach_initiated_at: null,
-        custom_message: null
-      });
+      patches.push({ player_id: spareId, concert_id: concertId, status: 'Available', spare_player_id: null, approached_spares: [], current_approach_index: 0, approach_initiated_at: null, custom_message: null });
     }
 
     if (status === 'Available') {
       const waitingCore = availability.find((a) =>
-        a.player_id !== playerId &&
-        a.concert_id === concertId &&
+        a.player_id !== playerId && a.concert_id === concertId &&
         ((a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted') &&
         a.approached_spares?.some((s: any) => s.id === playerId)
       );
       if (waitingCore) {
-        patches.push({
-          player_id: waitingCore.player_id,
-          concert_id: concertId,
-          status: 'Spare Assigned',
-          spare_player_id: playerId,
-          approached_spares: waitingCore.approached_spares || [],
-          current_approach_index: waitingCore.current_approach_index ?? 0,
-          approach_initiated_at: waitingCore.approach_initiated_at ?? null,
-          custom_message: null
-        });
+        patches.push({ player_id: waitingCore.player_id, concert_id: concertId, status: 'Spare Assigned', spare_player_id: playerId, approached_spares: waitingCore.approached_spares || [], current_approach_index: waitingCore.current_approach_index ?? 0, approach_initiated_at: waitingCore.approach_initiated_at ?? null, custom_message: null });
       }
     }
 
@@ -379,13 +357,11 @@ export default function AvailabilityMatrix() {
       let newState = [...prev];
       for (const p of patches) {
         const existingIdx = newState.findIndex((a) => a.player_id === p.player_id && a.concert_id === p.concert_id);
-        if (existingIdx !== -1) {
-          newState[existingIdx] = { ...newState[existingIdx], ...p };
-        } else {
+        if (existingIdx !== -1) newState[existingIdx] = { ...newState[existingIdx], ...p };
+        else {
           const playerObj = players.find((x) => x.id === p.player_id) || globalSpares.find((x) => x.id === p.player_id);
           const concertObj = concerts.find((x) => x.id === p.concert_id)!;
-          if (playerObj && concertObj) {
-newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, concert: concertObj } as unknown as AvailabilityCell);          }
+          if (playerObj && concertObj) newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, concert: concertObj } as unknown as AvailabilityCell); 
         }
       }
       return newState;
@@ -402,15 +378,8 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
 
   function openCascadeCompose(concertId: string, anchorId: string, selectedSpares: any[], dropdownIdToClose: string | null) {
     const concert = concerts.find(c => c.id === concertId);
-    setCascadeMessage(''); // Clear the message box for a fresh modal
-    setCascadeCompose({
-      concertId,
-      concertName: concert?.name || 'Concert',
-      playerIds: selectedSpares.map(s => s.id),
-      selectedSpares,
-      anchorId,
-      dropdownIdToClose
-    });
+    setCascadeMessage('');
+    setCascadeCompose({ concertId, concertName: concert?.name || 'Concert', playerIds: selectedSpares.map(s => s.id), selectedSpares, anchorId, dropdownIdToClose });
   }
 
   async function handleDragEnd(event: DragEndEvent, sectionIdentifier: string) {
@@ -441,11 +410,7 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
     if (error || !inserted) return setToast('Error adding player');
 
     if (concerts.length > 0 && newPlayerForm.status === 'Active') {
-      await supabase.from('availability').insert(concerts.map((c) => ({ 
-        player_id: inserted.id, 
-        concert_id: c.id, 
-        status: 'Not Responded' as AvailabilityStatus 
-      })));
+      await supabase.from('availability').insert(concerts.map((c) => ({ player_id: inserted.id, concert_id: c.id, status: 'Not Responded' as AvailabilityStatus })));
     }    
     setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
   }
@@ -455,20 +420,8 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
     const isRanked = rIdx !== -1;
 
     return (
-      <div 
-        key={s.id} 
-        style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isRanked ? '#eff6ff' : 'transparent', transition: 'background 0.2s' }}
-      >
-        <div 
-          onClick={() => {
-            setShortlist((prev: any[]) => {
-              if (isRanked) return prev.filter((item: any) => item.id !== s.id);
-              if (prev.length >= 3) return prev;
-              return [...prev, s];
-            });
-          }}
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, marginRight: '8px', cursor: 'pointer' }}
-        >
+      <div key={s.id} style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isRanked ? '#eff6ff' : 'transparent', transition: 'background 0.2s' }}>
+        <div onClick={() => { setShortlist((prev: any[]) => { if (isRanked) return prev.filter((item: any) => item.id !== s.id); if (prev.length >= 3) return prev; return [...prev, s]; }); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, marginRight: '8px', cursor: 'pointer' }}>
           <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isRanked ? '#2563eb' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: isRanked ? '#2563eb' : '#fff', color: '#fff', fontSize: '11px', fontWeight: 'bold', flexShrink: 0, transition: 'all 0.1s' }}>
             {isRanked ? (rIdx + 1) : ''}
           </div>
@@ -481,29 +434,8 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button 
-            title="Email this player immediately"
-            onClick={(e) => { 
-               e.stopPropagation();
-               const anchorId = targetCorePlayerId || s.id;
-               openCascadeCompose(concertId, anchorId, [s], dropdownId);
-            }}
-            style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >Email</button>
-
-<button 
-            title="Directly assign to gig"
-            onClick={(e) => { 
-               e.stopPropagation();
-               if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
-               // 🌟 FIX: Force vacant seat assignments to use 'Spare Assigned' so they turn BLUE!
-               else onSetStatus(s.id, concertId, 'Spare Assigned');
-               
-               if (dropdownId === vacantDropdown) setVacantDropdown(null);
-               if (dropdownId === activeDropdown) setActiveDropdown(null);
-            }}
-            style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >Assign</button>
+          <button title="Email this player immediately" onClick={(e) => { e.stopPropagation(); const anchorId = targetCorePlayerId || s.id; openCascadeCompose(concertId, anchorId, [s], dropdownId); }} style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Email</button>
+          <button title="Directly assign to gig" onClick={(e) => { e.stopPropagation(); if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id); else onSetStatus(s.id, concertId, 'Spare Assigned'); if (dropdownId === vacantDropdown) setVacantDropdown(null); if (dropdownId === activeDropdown) setActiveDropdown(null); }} style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Assign</button>
         </div>
       </div>
     );
@@ -530,7 +462,6 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
           <p style={{ color: '#64748b', fontSize: '16px' }}>No live concerts available. Add and publish them in the Concerts tab!</p>
         </div>
       ) : (
-        // 🌟 FIX: Added the "className='w-full overflow-x-auto'" so the table scrolls left/right on mobile!
         <div className="w-full overflow-x-auto pb-4" style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', maxWidth: '100vw' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
             <thead>
@@ -560,12 +491,12 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
-const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));                        const totalSparesCount = localS.length + globalS.length;
+                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
+                        const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
-                           
-                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                           
+                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                          
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                                <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
@@ -666,24 +597,23 @@ const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status =
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
 
-<form onSubmit={async (e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
               if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
-              // 1. 🌟 FIX: Standardized status string to 'Deps Contacted' to match your strict DB enum rule!
+              // 🌟 FIX: We MUST pass 'Spares Contacted' to successfully save to the Database! 
               await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
-                'Deps Contacted' as any, 
+                'Spares Contacted' as any, 
                 undefined, 
                 cascadeCompose.selectedSpares,
                 cascadeMessage 
               );
 
-              // 2. Fire email engine
               try {
                 await supabase.functions.invoke('send-concert-emails', {
                   body: {
@@ -697,18 +627,10 @@ const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status =
                 setToast('Database updated, but email dispatch failed.');
               }
             }}>
-              {/* 🌟 FIX: Added textarea for the custom message note */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Custom Email Note (Optional)</label>
-                <textarea 
-                  rows={3} 
-                  value={cascadeMessage} 
-                  onChange={e => setCascadeMessage(e.target.value)} 
-                  placeholder="e.g. Bring a white shirt and music stand..." 
-                  style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} 
-                />
+                <textarea rows={3} value={cascadeMessage} onChange={e => setCascadeMessage(e.target.value)} placeholder="e.g. Bring a white shirt and music stand..." style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                 <button type="button" onClick={() => setCascadeCompose(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" style={{ padding: '8px 16px', borderRadius: '6px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Start Cascade</button>

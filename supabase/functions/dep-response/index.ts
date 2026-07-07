@@ -19,13 +19,28 @@ Deno.serve(async (req) => {
     
     if (!player_id || !concert_id) return Response.redirect(`${FRONTEND_URL}/respond?status=invalid`, 302);
 
-    // Smart Radar Lookup: Locate the true availability row that this dep/spare was shortlisted on
+    // 🌟 SMART RADAR SCAN: Find the exact row this player belongs to
     const { data: allAvails } = await supabase.from('availability').select('*').eq('concert_id', concert_id);
-    let currentAvail = allAvails?.find(a => a.player_id === player_id || a.approached_spares?.some((s: any) => s.id === player_id));
+    let currentAvail = allAvails?.find(a => a.player_id === player_id); 
     
+    if (!currentAvail) {
+      // If not found directly, they are a Dep. Find the row where they were asked.
+      currentAvail = allAvails?.find(a => a.approached_spares?.some((s: any) => s.id === player_id));
+    }
+
     const anchor_player_id = currentAvail ? currentAvail.player_id : player_id;
 
-    // Handle Core Member Updates
+    // 🌟 RESTORED BLOCKER: If the gig is already filled (Green or Blue), bounce late-clickers!
+    if (currentAvail && (currentAvail.status === 'Available' || currentAvail.status === 'Spare Assigned')) {
+       // Only let them proceed if they are trying to DECLINE a gig they already hold
+       const isCoreDecliningOwn = (action === 'core-decline' || action === 'decline') && currentAvail.player_id === player_id;
+       const isDepDecliningOwn = (action === 'dep-decline' || action === 'decline') && currentAvail.spare_player_id === player_id;
+       
+       if (!isCoreDecliningOwn && !isDepDecliningOwn) {
+         return Response.redirect(`${FRONTEND_URL}/respond?status=contact-manager`, 302);
+       }
+    }
+
     if (action === 'core-accept') {
       await supabase.from('availability').upsert({ player_id: anchor_player_id, concert_id, status: 'Available' }, { onConflict: 'player_id,concert_id' });
       return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
@@ -35,7 +50,6 @@ Deno.serve(async (req) => {
       return Response.redirect(`${FRONTEND_URL}/respond?status=declined`, 302);
     }
 
-    // Handle Dep/Spare Responses
     if (action === 'dep-accept' || action === 'accept') {
       const { data: anchorPlayer } = await supabase.from('players').select('status').eq('id', anchor_player_id).single();
       const isVacantCascade = anchorPlayer?.status === 'Spare';
