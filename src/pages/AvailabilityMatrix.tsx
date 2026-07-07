@@ -338,14 +338,40 @@ export default function AvailabilityMatrix() {
     return { localS, globalS };
   }
 
-  async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[], customMessage?: string) {
-    const patch = { player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null, approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null, custom_message: customMessage || null };
+  async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[], customMessage?: string, targetInstrument?: string) {
+    // 1. Build the primary patch for whoever was clicked/targeted
+    const patch = { 
+      player_id: playerId, 
+      concert_id: concertId, 
+      status, 
+      spare_player_id: spareId || null, 
+      approached_spares: shortlist || [], 
+      current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, 
+      approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null, 
+      custom_message: customMessage || null, 
+      target_instrument: targetInstrument || null 
+    };
+    
     const patches = [patch];
 
-    if (status === 'Spare Assigned' && spareId) {
-      patches.push({ player_id: spareId, concert_id: concertId, status: 'Available', spare_player_id: null, approached_spares: [], current_approach_index: 0, approach_initiated_at: null, custom_message: null });
+    // 🌟 DUAL ROUTING FIX: If we are assigning a spare to an Active core member, 
+    // playerId is the ACTIVE member. spareId is the SPARE.
+    // We must explicitly ensure the spare player gets marked as 'Available' in their own record so they are booked out!
+    if (status === 'Spare Assigned' && spareId && spareId !== playerId) {
+      patches.push({ 
+        player_id: spareId, 
+        concert_id: concertId, 
+        status: 'Available', 
+        spare_player_id: null, 
+        approached_spares: [], 
+        current_approach_index: 0, 
+        approach_initiated_at: null, 
+        custom_message: null, 
+        target_instrument: targetInstrument || null 
+      });
     }
 
+    // If an incoming spare accepted a request via email cascade, handle it safely
     if (status === 'Available') {
       const waitingCore = availability.find((a) =>
         a.player_id !== playerId && a.concert_id === concertId &&
@@ -353,30 +379,56 @@ export default function AvailabilityMatrix() {
         a.approached_spares?.some((s: any) => s.id === playerId)
       );
       if (waitingCore) {
-        patches.push({ player_id: waitingCore.player_id, concert_id: concertId, status: 'Spare Assigned', spare_player_id: playerId, approached_spares: waitingCore.approached_spares || [], current_approach_index: waitingCore.current_approach_index ?? 0, approach_initiated_at: waitingCore.approach_initiated_at ?? null, custom_message: null });
+        patches.push({ 
+          player_id: waitingCore.player_id, 
+          concert_id: concertId, 
+          status: 'Spare Assigned', 
+          spare_player_id: playerId, 
+          approached_spares: waitingCore.approached_spares || [], 
+          current_approach_index: waitingCore.current_approach_index ?? 0, 
+          approach_initiated_at: waitingCore.approach_initiated_at ?? null, 
+          custom_message: null, 
+          target_instrument: waitingCore.target_instrument ?? null 
+        });
       }
     }
 
+    // 🌟 LOCAL STATE SYNC FIX: Map through updates and correctly match fallback layout structures
     setAvailability((prev) => {
       let newState = [...prev];
       for (const p of patches) {
         const existingIdx = newState.findIndex((a) => a.player_id === p.player_id && a.concert_id === p.concert_id);
-        if (existingIdx !== -1) newState[existingIdx] = { ...newState[existingIdx], ...p };
-        else {
-          const playerObj = players.find((x) => x.id === p.player_id) || globalSpares.find((x) => x.id === p.player_id);
-          const concertObj = concerts.find((x) => x.id === p.concert_id)!;
-          if (playerObj && concertObj) newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, concert: concertObj } as unknown as AvailabilityCell); 
+        
+        const playerObj = players.find((x) => x.id === p.player_id) || globalSpares.find((x) => x.id === p.player_id);
+        const concertObj = concerts.find((x) => x.id === p.concert_id);
+
+        if (playerObj && concertObj) {
+          const enrichedCell = {
+            id: `${p.player_id}-${p.concert_id}`,
+            ...p,
+            player: playerObj,
+            concert: concertObj,
+            approached_spares: p.approached_spares || []
+          } as AvailabilityCell;
+
+          if (existingIdx !== -1) {
+            newState[existingIdx] = enrichedCell;
+          } else {
+            newState.push(enrichedCell);
+          }
         }
       }
       return newState;
     });
 
     try {
+      // Upsert all patches to Supabase cleanly
       await Promise.all(patches.map(p => supabase.from('availability').upsert(p, { onConflict: 'player_id,concert_id' })));
       if (!shortlist) setToast('Status synced successfully.');
-    } catch {
+    } catch (err) {
+      console.error("Error upserting availability status:", err);
       setToast('Error syncing availability.');
-      await fetchData();
+      await fetchData(); // Fallback hard-reload if network drops
     }
   }
 

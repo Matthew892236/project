@@ -147,12 +147,13 @@ export default function App() {
 
   // 🌟 Clean Public Entry points
 // 🌟 Clean Public Entry points
+// 🌟 Clean Public Entry points
   if (cleanPath === '/respond') {
-    const params = new URLSearchParams(window.location.search);
-    const hasStatusRedirect = params.has('status');
+    const isStatusRedirect = window.location.search.includes('status=');
     return (
       <>
-        {hasStatusRedirect ? (
+        {/* If there is a status popup, show a clean background. Otherwise, show the normal Respond page */}
+        {isStatusRedirect ? (
           <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }} />
         ) : (
           <Respond />

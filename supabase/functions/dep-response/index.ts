@@ -29,27 +29,36 @@ Deno.serve(async (req) => {
 
     const anchor_player_id = currentAvail ? currentAvail.player_id : player_id;
 
-    // 🌟 RESTORED BLOCKER: If the gig is already filled (Green or Blue), bounce late-clickers!
+    // 🛑 THE STRICT BOUNCER: If the gig is already filled (Green or Blue)
     if (currentAvail && (currentAvail.status === 'Available' || currentAvail.status === 'Spare Assigned')) {
-       const isCoreDecliningOwn = (action === 'core-decline' || action === 'decline') && currentAvail.player_id === player_id;
-       const isDepDecliningOwn = (action === 'dep-decline' || action === 'decline') && currentAvail.spare_player_id === player_id;
        
-       if (!isCoreDecliningOwn && !isDepDecliningOwn) {
+       // Rule 1: If anyone tries to decline an already-accepted gig, STOP THEM.
+       if (action === 'core-decline' || action === 'decline' || action === 'dep-decline') {
+         return Response.redirect(`${FRONTEND_URL}/respond?status=contact-manager`, 302);
+       }
+
+       // Rule 2: If a late spare tries to accept a gig someone else already took, STOP THEM.
+       const isCore = player_id === currentAvail.player_id;
+       const isAssignedSpare = player_id === currentAvail.spare_player_id;
+       
+       if (!isCore && !isAssignedSpare) {
          return Response.redirect(`${FRONTEND_URL}/respond?status=contact-manager`, 302);
        }
     }
+
+    // --- STANDARD PROCESSING FOR UNFILLED GIGS ---
 
     if (action === 'core-accept') {
       await supabase.from('availability').upsert({ player_id: anchor_player_id, concert_id, status: 'Available' }, { onConflict: 'player_id,concert_id' });
       return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
     }
+    
     if (action === 'core-decline') {
       await supabase.from('availability').upsert({ player_id: anchor_player_id, concert_id, status: 'Not Available' }, { onConflict: 'player_id,concert_id' });
       return Response.redirect(`${FRONTEND_URL}/respond?status=declined`, 302);
     }
 
     if (action === 'dep-accept' || action === 'accept') {
-      // 🌟 FIX: Force ALL Spare acceptances to lock in as 'Spare Assigned' (Blue) so they never turn Green!
       await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).match({ player_id: anchor_player_id, concert_id });
       return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
     }
