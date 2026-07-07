@@ -63,7 +63,7 @@ function ResponseNotification() {
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>🌍</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Welcome to the Network!</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              You are officially on the Global Spares Network! Band Managers nearby will now be able to find and contact you when they need a dep for your instrument.
+              You are officially on the Deps Network! Band Managers nearby will now be able to find and contact you when they need a dep for your instrument.
             </p>
           </>
         ) : status === 'accepted' || status === 'available' ? (
