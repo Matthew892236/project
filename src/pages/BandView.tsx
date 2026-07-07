@@ -68,10 +68,13 @@ export default function BandView() {
       setBandName(bandData.name);
 
       const [concertsRes, playersRes, availabilityRes] = await Promise.all([
-        supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
-        supabase.from('players').select('id, name, instrument, status, sort_order').eq('band_id', bandData.id).order('sort_order'),
-        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
-      ]);
+      supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
+      
+      // 🌟 FIX: Changed from picking specific fields to select('*') to give TypeScript the full Player object!
+      supabase.from('players').select('*').eq('band_id', bandData.id).order('sort_order'),
+      
+      supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
+    ]);
 
       setConcerts((concertsRes.data as MatrixConcert[]) || []);
       setPlayers(playersRes.data || []);
