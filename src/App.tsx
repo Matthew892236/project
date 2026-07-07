@@ -20,7 +20,8 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network') {
+    // 🌟 Added 'welcome' to your custom popup catcher!
+    if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network' || currentStatus === 'welcome') {
       setStatus(currentStatus);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -58,12 +59,12 @@ function ResponseNotification() {
           ✕
         </button>
 
-        {status === 'joined-network' ? (
+        {status === 'joined-network' || status === 'welcome' ? (
           <>
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>🌍</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Welcome to the Network!</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              You are officially on the Deps Network! Band Managers nearby will now be able to find and contact you when they need a dep for your instrument.
+              Thank you for adding your name to help the band community! You are officially on the Global Dep Network. If you would like your name removed, please contact admin@brassbandwidth.com.
             </p>
           </>
         ) : status === 'accepted' || status === 'available' ? (
@@ -111,13 +112,6 @@ export default function App() {
   const [hasBand, setHasBand] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('status') === 'welcome') {
-      alert("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
-    }
-  }, []);
-
-  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
@@ -149,12 +143,17 @@ export default function App() {
 
   const cleanPath = window.location.pathname.replace(/\/$/, '');
 
-  // 🌟 Clean Public Entry points (Matrix removed from here so it doesn't leak out)
+  // 🌟 Clean Public Entry points
   if (cleanPath === '/respond') return <><Respond /><ResponseNotification /></>;
   if (cleanPath === '/band-view') return <><BandView /><ResponseNotification /></>;
 
   // Session Loading States
   if (session === undefined || (session && hasBand === null)) return null;
+
+  // 🛑 GHOST OVERRIDE: If the URL has a password reset token, freeze here and show the Login screen
+  if (window.location.hash.includes('type=recovery')) {
+    return <><Login /><ResponseNotification /></>;
+  }
   
   // Gate 1: Enforce Login Wall
   if (!session) return <><Login /><ResponseNotification /></>;
@@ -173,8 +172,6 @@ export default function App() {
             <Route index element={<Overview />} />
             <Route path="concerts" element={<ConcertDirectory />} />
             <Route path="roster" element={<BandRoster />} />
-            
-            {/* 🌟 FIXED: Changed from 'availability' to 'matrix' so it links to sidebar seamlessly */}
             <Route path="matrix" element={<AvailabilityMatrix />} /> 
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

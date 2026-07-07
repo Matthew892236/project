@@ -261,8 +261,8 @@ export default function BandView() {
               {[
                 { bg: '#dcfce7', color: '#166534', label: 'Available / Covered' },
                 { bg: '#fee2e2', color: '#991b1b', label: 'Not Available' },
-                { bg: '#dbeafe', color: '#1e40af', label: 'Spare Assigned' },
-                { bg: '#ffedd5', color: '#9a3412', label: 'Spares Contacted' },
+                { bg: '#dbeafe', color: '#1e40af', label: 'Dep Assigned' },
+                { bg: '#ffedd5', color: '#9a3412', label: 'Deps Contacted' },
                 { bg: '#f3f4f6', color: '#9ca3af', label: 'Not Responded / Vacant' },
               ].map(({ bg, color, label }) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#475569' }}>
