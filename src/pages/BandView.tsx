@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Grid3X3, Music, Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { Music, Calendar, MapPin, Users, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Player, Concert } from '../lib/supabase';
 const STANDARD_INSTRUMENTS = [
