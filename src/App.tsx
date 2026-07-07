@@ -146,7 +146,21 @@ export default function App() {
   const cleanPath = window.location.pathname.replace(/\/$/, '');
 
   // 🌟 Clean Public Entry points
-  if (cleanPath === '/respond') return <><Respond /><ResponseNotification /></>;
+// 🌟 Clean Public Entry points
+  if (cleanPath === '/respond') {
+    const params = new URLSearchParams(window.location.search);
+    const hasStatusRedirect = params.has('status');
+    return (
+      <>
+        {hasStatusRedirect ? (
+          <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui, sans-serif' }} />
+        ) : (
+          <Respond />
+        )}
+        <ResponseNotification />
+      </>
+    );
+  }
   if (cleanPath === '/band-view') return <><BandView /><ResponseNotification /></>;
 
   // Session Loading States

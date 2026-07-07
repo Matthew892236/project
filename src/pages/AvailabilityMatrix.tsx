@@ -560,8 +560,7 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
-                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
-                        const totalSparesCount = localS.length + globalS.length;
+const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));                        const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };

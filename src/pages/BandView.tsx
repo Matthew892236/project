@@ -22,25 +22,26 @@ type Availability = {
   current_approach_index?: number;
 };
 
-function statusColor(status: string) {
-  if (status === 'Available') return '#dcfce7'; 
-  if (status === 'Not Available') return '#fee2e2'; 
-  if (status === 'Spare Assigned') return '#dbeafe'; 
-  if (status === 'Spares Contacted' || status === 'Deps Contacted') return '#ffedd5'; 
-  return '#f3f4f6'; 
+function getCellStyle(status: AvailabilityStatus) {
+  if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
+  if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // 🌟 Pure Blue
+  
+  // 🌟 Catch-all for 'Spares Contacted', 'Deps Contacted', or queue states
+  return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Solid Yellow/Orange Cascade
 }
 
-function statusText(avail: Availability, players: Player[]) {
-  if (avail.status === 'Available') {
-    // 🌟 If a vacant seat is filled, the player_id won't be in the core band. Let's pull their name!
-    const isCore = players.some(p => p.id === avail.player_id);
-    if (!isCore && avail.approached_spares) {
-      const spare = avail.approached_spares.find((s: any) => s.id === avail.player_id);
-      if (spare) return { label: `Covered: ${spare.name.split(' ')[0]}`, color: '#166534' };
-    }
-    return { label: 'Available', color: '#166534' };
+function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
+  if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
+  if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
+  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
+  if (((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') && approachedList && approachedList.length > 0) {
+    const activeIdx = currentIndex || 0;
+    const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
+    return <span style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 700 }}>Asked: {currentActivePlayer.name.split(' ')[0]} ({activeIdx + 1}/{approachedList.length})</span>;
   }
-  
+  return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '13px' }}>No Response</span>;
+}
   if (avail.status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
   
   if (avail.status === 'Spare Assigned') {
@@ -137,8 +138,7 @@ export default function BandView() {
             {/* Concert cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '32px' }}>
               {concerts.map((c) => {
-                const available = availability.filter((a) => a.concert_id === c.id && (a.status === 'Available' || a.status === 'Spare Assigned')).length;
-                const total = activePlayers.length;
+const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));                const total = activePlayers.length;
                 return (
                   <div key={c.id} style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{c.name}</h3>
