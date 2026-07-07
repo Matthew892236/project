@@ -7,7 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// UK Date Formatter
 const formatDateUK = (dateStr?: string) => {
   if (!dateStr) return "TBD";
   const d = new Date(dateStr);
@@ -26,8 +25,6 @@ Deno.serve(async (req) => {
     const player_ids = body.player_ids || body.playerIds;
     const general = body.general;
     const subject = body.subject || "";
-    
-    // 🌟 FIX: Safely catch the custom message no matter how the CRON/Frontend formats it
     const message = body.message || body.customMessage || body.custom_message || null;
 
     let concertDetails = null;
@@ -44,7 +41,6 @@ Deno.serve(async (req) => {
     const concertDateDisplay = formatDateUK(concertDetails?.concert_date || concertDetails?.date);
     const concertVenueDisplay = concertDetails?.venue || concertDetails?.location || "TBD";
 
-    // 🌟 SMART EMAIL TYPE DETECTION
     const isLineupEmail = subject.toLowerCase().includes('lineup') || subject.toLowerCase().includes('confirmed');
     const showButtons = !general && concertDetails && !isLineupEmail;
 
@@ -79,26 +75,41 @@ Deno.serve(async (req) => {
       if (!player.email) continue;
       const matrixLink = `https://brassbandwidth.netlify.app/band-view?uid=${player.band_id || bandId}`;
 
+      const isSpareRecipient = 
+        player.status === 'Spare' || 
+        player.is_global_spare === true || 
+        (concertDetails && player.band_id !== concertDetails.band_id) || 
+        (!player.band_id);
+
+      const emailHeaderTitle = isSpareRecipient 
+        ? `Dep Request: ${concertNameDisplay}` 
+        : `Availability Request: ${concertNameDisplay}`;
+
+      const emailIntroText = isSpareRecipient
+        ? `<strong>${bandName}</strong> is looking for a dep on <strong>${player.instrument || 'your instrument'}</strong> for their upcoming concert.`
+        : `Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.`;
+
       let htmlBody = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">${!showButtons ? subject : `Availability Request: ${concertNameDisplay}`} 🎺</h2>
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">${!showButtons ? subject : emailHeaderTitle} 🎺</h2>
           <p style="color: #334155; font-size: 16px;">Hi ${player.name.split(' ')[0]},</p>
-          ${showButtons ? `<p style="color: #334155; font-size: 16px;">Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.</p>` : ''}
+          ${showButtons ? `<p style="color: #334155; font-size: 16px; lineHeight: 1.5;">${emailIntroText}</p>` : ''}
           ${message ? `<p style="color: #334155; font-size: 14px; white-space: pre-wrap; ${showButtons ? 'font-style: italic; background: #f1f5f9; padding: 12px; border-radius: 6px;' : ''}">${message}</p>` : ''}
       `;
 
       if (showButtons) {
-const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-accept&t=${Date.now()}`;
-const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-decline&t=${Date.now()}`;
+        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-accept&t=${Date.now()}`;
+        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-decline&t=${Date.now()}`;
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>🎵 Host Band:</strong> ${bandName}</p>
             <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>🎵 Event:</strong> ${concertNameDisplay}</p>
             <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>📅 Date:</strong> ${concertDateDisplay}</p>
             <p style="margin: 0; color: #1e293b;"><strong>📍 Location:</strong> ${concertVenueDisplay}</p>
           </div>
           <div style="margin: 28px 0; text-align: center;">
-            <a href="${acceptLink}" style="background-color: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-right: 12px; display: inline-block;">✅ Available</a>
-            <a href="${declineLink}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">✕ Not Available</a>
+            <a href="${acceptLink}" style="background-color: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-right: 12px; display: inline-block;">✅ Accept Gig</a>
+            <a href="${declineLink}" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">✕ Decline</a>
           </div>
         `;
       }
@@ -108,16 +119,13 @@ const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDeta
             <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>
       `;
 
-      // 🌟 FIX: Hide the "Join Network" button ONLY from Global Spares.
-      // Local spares (who share the band_id) WILL still see the button!
       const isAlreadyGlobal = 
         player.is_global_spare === true || 
         (concertDetails && player.band_id !== concertDetails.band_id) || 
         (!player.band_id);
 
-if (!isAlreadyGlobal) {
-        // 🌟 FIX: Point this directly to your Netlify URL instead of BASE_URL so they see the welcome popup box!
-const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}`;        
+      if (!isAlreadyGlobal) {
+        const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
 
@@ -130,7 +138,14 @@ const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=wel
         </div>
       `;
 
-      const finalSubject = subject.includes(concertNameDisplay) ? subject : `${subject} - ${concertNameDisplay}`;
+      let finalSubject = subject;
+      if (!finalSubject || finalSubject === "" || finalSubject.toLowerCase().includes("availability")) {
+        finalSubject = isSpareRecipient 
+          ? `Dep Request: ${concertNameDisplay} (${player.instrument || 'Musician'})` 
+          : `Availability Request: ${concertNameDisplay}`;
+      } else if (!finalSubject.includes(concertNameDisplay)) {
+        finalSubject = `${finalSubject} - ${concertNameDisplay}`;
+      }
 
       await fetch("https://api.resend.com/emails", {
         method: "POST", headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },

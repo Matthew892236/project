@@ -674,17 +674,17 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
-              // 1. Update the Database visually
+              // 1. 🌟 FIX: Standardized status string to 'Deps Contacted' to match your strict DB enum rule!
               await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
-                'Spares Contacted' as any, 
+                'Deps Contacted' as any, 
                 undefined, 
                 cascadeCompose.selectedSpares,
                 cascadeMessage 
               );
 
-              // 2. 🌟 NEW: ACTUALLY FIRE THE EMAIL ENGINE!
+              // 2. Fire email engine
               try {
                 await supabase.functions.invoke('send-concert-emails', {
                   body: {
