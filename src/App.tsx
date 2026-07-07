@@ -20,7 +20,6 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    // 🌟 Added 'welcome' to your custom popup catcher!
     if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network' || currentStatus === 'welcome') {
       setStatus(currentStatus);
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -110,14 +109,19 @@ function ResponseNotification() {
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasBand, setHasBand] = useState<boolean | null>(null);
+  
+  // 🌟 NEW: Track Supabase's internal auth events
+  const [authEvent, setAuthEvent] = useState<string | null>(null); 
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      // 🌟 NEW: Record exactly what Supabase is doing (like a password reset)
+      setAuthEvent(event); 
     });
 
     return () => subscription.unsubscribe();
@@ -150,8 +154,12 @@ export default function App() {
   // Session Loading States
   if (session === undefined || (session && hasBand === null)) return null;
 
-  // 🛑 GHOST OVERRIDE: If the URL has a password reset token, freeze here and show the Login screen
-  if (window.location.hash.includes('type=recovery')) {
+  // 🛑 BULLETPROOF OVERRIDE: If Supabase tells us they are recovering a password, stay on Login!
+  if (
+    authEvent === 'PASSWORD_RECOVERY' || 
+    window.location.hash.includes('type=recovery') || 
+    window.location.search.includes('type=recovery')
+  ) {
     return <><Login /><ResponseNotification /></>;
   }
   
