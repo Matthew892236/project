@@ -386,8 +386,7 @@ export default function AvailabilityMatrix() {
           const playerObj = players.find((x) => x.id === p.player_id) || globalSpares.find((x) => x.id === p.player_id);
           const concertObj = concerts.find((x) => x.id === p.concert_id)!;
           if (playerObj && concertObj) {
-            newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, concert: concertObj } as AvailabilityCell);
-          }
+newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, concert: concertObj } as unknown as AvailabilityCell);          }
         }
       }
       return newState;
