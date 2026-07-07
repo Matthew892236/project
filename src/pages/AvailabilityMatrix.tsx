@@ -15,6 +15,28 @@ const STANDARD_INSTRUMENTS = [
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
+// 🌟 FIX: Global Instrument Matcher ensures "Cornet" locks into "Principal Cornet" vacant rows without disappearing!
+const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
+const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
+const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
+const TROMBONES = ["1st trombone", "2nd trombone", "bass trombone", "trombone", "trombones"];
+const BASSES = ["eeb bass", "bbb bass", "bass", "basses", "tuba", "tubas", "eb bass", "bb bass", "ee flat bass", "bb flat bass"];
+const PERCUSSION = ["percussion", "kit", "tuned", "timpani", "timps", "percussionist"];
+
+export function isInstrumentMatch(playerInst: string | undefined, targInst: string) {
+  if (!playerInst || !targInst) return false;
+  const p = playerInst.toLowerCase().trim();
+  const t = targInst.toLowerCase().trim();
+  if (p === t) return true;
+  if (CORNET_FLUGEL.includes(p) && CORNET_FLUGEL.includes(t)) return true;
+  if (HORNS.includes(p) && HORNS.includes(t)) return true;
+  if (BARI_EUPH.includes(p) && BARI_EUPH.includes(t)) return true;
+  if (TROMBONES.includes(p) && TROMBONES.includes(t)) return true;
+  if (BASSES.includes(p) && BASSES.includes(t)) return true;
+  if (PERCUSSION.includes(p) && PERCUSSION.includes(t)) return true;
+  return false;
+}
+
 type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
 type AvailabilityCell = Availability & { 
   player: Player; concert: MatrixConcert;
@@ -212,7 +234,7 @@ export default function AvailabilityMatrix() {
     fetchData(); 
     const params = new URLSearchParams(window.location.search);
     if (params.get('status') === 'contact-manager') {
-      setToast("⚠️ You have already accepted this gig! To back out, you must contact the Band Manager directly.");
+      setToast("⚠️ This seat is already filled! To back out, you must contact the Band Manager directly.");
     }
     if (params.get('status') === 'welcome') {
       setToast("🎺 Thank you for adding your name to help the band community!");
@@ -286,27 +308,9 @@ export default function AvailabilityMatrix() {
       }
     });
 
-    const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
-    const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
-    const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
-    const TROMBONES = ["1st trombone", "2nd trombone", "bass trombone", "trombone", "trombones"];
-    const BASSES = ["eeb bass", "bbb bass", "bass", "basses", "tuba", "tubas", "eb bass", "bb bass", "ee flat bass", "bb flat bass"];
-    const PERCUSSION = ["percussion", "kit", "tuned", "timpani", "timps", "percussionist"];
-
-    function isMatch(playerInst: string, targInst: string) {
-      if (playerInst === targInst) return true;
-      if (CORNET_FLUGEL.includes(playerInst) && CORNET_FLUGEL.includes(targInst)) return true;
-      if (HORNS.includes(playerInst) && HORNS.includes(targInst)) return true;
-      if (BARI_EUPH.includes(playerInst) && BARI_EUPH.includes(targInst)) return true;
-      if (TROMBONES.includes(playerInst) && TROMBONES.includes(targInst)) return true;
-      if (BASSES.includes(playerInst) && BASSES.includes(targInst)) return true;
-      if (PERCUSSION.includes(playerInst) && PERCUSSION.includes(targInst)) return true;
-      return false;
-    }
-
     function playerMatches(p: any, targInst: string) {
-      if (isMatch(p.instrument.toLowerCase().trim(), targInst)) return true;
-      if (p.tags && Array.isArray(p.tags)) return p.tags.some((tag: string) => isMatch(tag.toLowerCase().trim(), targInst));
+      if (isInstrumentMatch(p.instrument, targInst)) return true;
+      if (p.tags && Array.isArray(p.tags)) return p.tags.some((tag: string) => isInstrumentMatch(tag, targInst));
       return false;
     }
 
@@ -443,9 +447,11 @@ export default function AvailabilityMatrix() {
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Availability Data...</div>;
 
-  const existingInstruments = Array.from(new Set(players.map(p => p.instrument)));
-  const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments]));
   const activePlayers = players.filter(p => p.status === 'Active');
+  
+  // 🌟 FIX: Stop phantom rows! We now ONLY generate rows based on ACTIVE band members, never spares.
+  const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
+  const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments]));
 
   return (
     <div style={{ padding: '32px', fontFamily: 'system-ui', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
@@ -491,7 +497,15 @@ export default function AvailabilityMatrix() {
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
-                        const fillingSpare = availability.find(a => a.concert_id === c.id && (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && a.player?.instrument === instrument && a.player?.status === 'Spare' && !busySpareIds.has(a.player_id));
+                        // 🌟 FIX: Utilize the new flexible isInstrumentMatch to find the exact contacted spare even if strings differ slightly!
+                        const fillingSpare = availability.find(a => 
+                          a.concert_id === c.id && 
+                          (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && 
+                          a.player?.status === 'Spare' && 
+                          isInstrumentMatch(a.player?.instrument, instrument) && 
+                          !busySpareIds.has(a.player_id)
+                        );
+                        
                         const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {

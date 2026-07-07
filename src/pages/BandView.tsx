@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Music, Calendar, MapPin, Users, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Player, Concert } from '../lib/supabase';
+
 const STANDARD_INSTRUMENTS = [
   "Conductor", "Soprano Cornet", "Principal Cornet", "Solo Cornet", "Repiano Cornet",
   "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
@@ -9,18 +10,38 @@ const STANDARD_INSTRUMENTS = [
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
-type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
+// 🌟 FIX: Use the identical matcher here to ensure Vacant Rows catch slightly differently named spares!
+const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
+const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
+const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
+const TROMBONES = ["1st trombone", "2nd trombone", "bass trombone", "trombone", "trombones"];
+const BASSES = ["eeb bass", "bbb bass", "bass", "basses", "tuba", "tubas", "eb bass", "bb bass", "ee flat bass", "bb flat bass"];
+const PERCUSSION = ["percussion", "kit", "tuned", "timpani", "timps", "percussionist"];
 
-// Unified Color Schema Helper
-function statusColor(status: string): string {
-  if (status === 'Available') return '#dcfce7'; // Light Green
-  if (status === 'Not Available') return '#fef2f2'; // Light Red
-  if (status === 'Spare Assigned') return '#dbeafe'; // Light Blue
-  if (status === 'Deps Contacted' || status === 'Spares Contacted') return '#fef3c7'; // Light Orange/Yellow
-  return '#f8fafc'; // Default off-white
+function isInstrumentMatch(playerInst: string | undefined, targInst: string) {
+  if (!playerInst || !targInst) return false;
+  const p = playerInst.toLowerCase().trim();
+  const t = targInst.toLowerCase().trim();
+  if (p === t) return true;
+  if (CORNET_FLUGEL.includes(p) && CORNET_FLUGEL.includes(t)) return true;
+  if (HORNS.includes(p) && HORNS.includes(t)) return true;
+  if (BARI_EUPH.includes(p) && BARI_EUPH.includes(t)) return true;
+  if (TROMBONES.includes(p) && TROMBONES.includes(t)) return true;
+  if (BASSES.includes(p) && BASSES.includes(t)) return true;
+  if (PERCUSSION.includes(p) && PERCUSSION.includes(t)) return true;
+  return false;
 }
 
-// Unified Text Label & Foreground Color Generator
+type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
+
+function statusColor(status: string): string {
+  if (status === 'Available') return '#dcfce7'; 
+  if (status === 'Not Available') return '#fef2f2'; 
+  if (status === 'Spare Assigned') return '#dbeafe'; 
+  if (status === 'Deps Contacted' || status === 'Spares Contacted') return '#fef3c7'; 
+  return '#f8fafc'; 
+}
+
 function statusText(avail: any, allPlayers: Player[]) {
   const status = avail?.status;
   if (status === 'Available') return { label: 'Available', color: '#166534' };
@@ -67,13 +88,10 @@ export default function BandView() {
       setBandName(bandData.name);
 
       const [concertsRes, playersRes, availabilityRes] = await Promise.all([
-      supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
-      
-      // 🌟 FIX: Changed from picking specific fields to select('*') to give TypeScript the full Player object!
-      supabase.from('players').select('*').eq('band_id', bandData.id).order('sort_order'),
-      
-      supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
-    ]);
+        supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
+        supabase.from('players').select('*').eq('band_id', bandData.id).order('sort_order'),
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
+      ]);
 
       setConcerts((concertsRes.data as MatrixConcert[]) || []);
       setPlayers(playersRes.data || []);
@@ -91,7 +109,9 @@ export default function BandView() {
   }
 
   const activePlayers = players.filter((p) => p.status === 'Active');
-  const existingInstruments = Array.from(new Set(players.map(p => p.instrument)));
+  
+  // 🌟 FIX: Only render columns based on ACTIVE players to stop Spares creating phantom rows
+  const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
   const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments]));
 
   return (
@@ -118,7 +138,6 @@ export default function BandView() {
           </div>
         ) : (
           <>
-            {/* Concert cards banner loop */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '32px' }}>
               {concerts.map((c) => {
                 const total = activePlayers.length;
@@ -146,7 +165,6 @@ export default function BandView() {
               })}
             </div>
 
-            {/* Availability Grid Table Layout */}
             <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
@@ -165,7 +183,6 @@ export default function BandView() {
                     {displayInstruments.map((instrument) => {
                       const section = activePlayers.filter((p) => p.instrument === instrument);
                       
-                      // Vacant Position Rows
                       if (section.length === 0) {
                         return (
                           <React.Fragment key={`vacant-frag-${instrument}`}>
@@ -183,7 +200,7 @@ export default function BandView() {
                                   a.concert_id === c.id && 
                                   (a.status === 'Available' || a.status === 'Deps Contacted' || a.status === 'Spares Contacted' || a.status === 'Spare Assigned') &&
                                   !activePlayers.some(p => p.id === a.player_id) && 
-                                  a.approached_spares?.some((s: any) => s.instrument === instrument)
+                                  isInstrumentMatch(a.player?.instrument, instrument) 
                                 );
 
                                 let label = '—';
@@ -210,7 +227,6 @@ export default function BandView() {
                         );
                       }
 
-                      // Active Roster Instrument Section Rows
                       return (
                         <React.Fragment key={`section-frag-${instrument}`}>
                           <tr>
@@ -246,7 +262,6 @@ export default function BandView() {
               </div>
             </div>
 
-            {/* Explanatory Visual Legend */}
             <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
                 { bg: '#dcfce7', color: '#166534', label: 'Available / Covered' },

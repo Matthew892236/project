@@ -24,7 +24,6 @@ Deno.serve(async (req) => {
     let currentAvail = allAvails?.find(a => a.player_id === player_id); 
     
     if (!currentAvail) {
-      // If not found directly, they are a Dep. Find the row where they were asked.
       currentAvail = allAvails?.find(a => a.approached_spares?.some((s: any) => s.id === player_id));
     }
 
@@ -32,7 +31,6 @@ Deno.serve(async (req) => {
 
     // 🌟 RESTORED BLOCKER: If the gig is already filled (Green or Blue), bounce late-clickers!
     if (currentAvail && (currentAvail.status === 'Available' || currentAvail.status === 'Spare Assigned')) {
-       // Only let them proceed if they are trying to DECLINE a gig they already hold
        const isCoreDecliningOwn = (action === 'core-decline' || action === 'decline') && currentAvail.player_id === player_id;
        const isDepDecliningOwn = (action === 'dep-decline' || action === 'decline') && currentAvail.spare_player_id === player_id;
        
@@ -51,14 +49,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'dep-accept' || action === 'accept') {
-      const { data: anchorPlayer } = await supabase.from('players').select('status').eq('id', anchor_player_id).single();
-      const isVacantCascade = anchorPlayer?.status === 'Spare';
-
-      if (isVacantCascade && player_id === anchor_player_id) {
-        await supabase.from('availability').update({ status: 'Available' }).match({ player_id: anchor_player_id, concert_id });
-      } else {
-        await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).match({ player_id: anchor_player_id, concert_id });
-      }
+      // 🌟 FIX: Force ALL Spare acceptances to lock in as 'Spare Assigned' (Blue) so they never turn Green!
+      await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).match({ player_id: anchor_player_id, concert_id });
       return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
     }
 
