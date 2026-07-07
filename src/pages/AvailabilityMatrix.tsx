@@ -33,7 +33,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Dep Assigned') return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
+  if (status === 'Spare Assigned') return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
   if ((status as string) === 'Deps Contacted') return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
   return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
 }
@@ -49,7 +49,7 @@ function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
 function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
   if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
   if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
-  if (status === 'Dep Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
+  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
   if ((status as string) === 'Deps Contacted' && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;
     const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
