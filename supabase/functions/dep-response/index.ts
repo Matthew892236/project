@@ -13,8 +13,8 @@ Deno.serve(async (req) => {
     const spare_id = url.searchParams.get('spare_id') || url.searchParams.get('spareId');
     const action = url.searchParams.get('action');
 
-    if (action === 'join-network' && player_id) {
-      await supabase.from('players').update({ status: 'Spare' }).eq('id', player_id);
+if (action === 'join-network' && player_id) {
+      await supabase.from('players').update({ is_global_spare: true }).eq('id', player_id);
       return Response.redirect(`${FRONTEND_URL}?status=welcome`, 302);
     }
     if (!player_id || !concert_id) return Response.redirect(`${FRONTEND_URL}?status=invalid`, 302);

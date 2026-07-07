@@ -213,6 +213,9 @@ export default function AvailabilityMatrix() {
     if (params.get('status') === 'welcome') {
       setToast("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
     }
+    if (params.get('status') === 'welcome') {
+      setToast("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
+    }
     const channel = supabase.channel('matrix-realtime-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'availability' }, (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
         const newRow = payload.new as any;

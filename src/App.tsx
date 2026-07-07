@@ -111,6 +111,13 @@ export default function App() {
   const [hasBand, setHasBand] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'welcome') {
+      alert("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
+    }
+  }, []);
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });

@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
         <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 14px; color: #475569;">
           <p>💬 Questions? <a href="${managerMailto}" style="color: #3b82f6; text-decoration: underline;">Message the Band Manager</a></p>
-          <p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities? <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Would you like to join the Global Spares network?</a></p>
+          <p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities? <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Would you like to join the Spares network?</a></p>
           
           <div style="margin-top: 24px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
             <p style="margin: 0 0 6px 0;"><strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network spare or listed on a local band roster for BrassBandwidth.</p>
