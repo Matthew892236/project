@@ -1,34 +1,29 @@
-import { useEffect, useState } from 'react';
-import { Music, Calendar, MapPin, Clock, Users } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Grid3X3, Info, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
 
-// 🌟 STANDARD_INSTRUMENTS locally to prevent module import errors
-const STANDARD_INSTRUMENTS = [
-  "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
-  "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
-  "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
-  "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
-];
-
-type Concert = { id: string; name: string; concert_date: string; start_time: string; end_time: string; location: string };
-type Player = { id: string; name: string; instrument: string; status: string; sort_order: number | null };
-
-type Availability = { 
-  player_id: string; 
-  concert_id: string; 
-  status: string; 
-  spare_player_id: string | null;
-  approached_spares?: any[];
-  current_approach_index?: number;
+type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
+type AvailabilityCell = Availability & { 
+  player: Player; concert: MatrixConcert;
+  approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
+  current_approach_index?: number; approach_initiated_at?: string | null;
 };
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8; 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // 🌟 Pure Blue
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' };
   
-  // 🌟 Catch-all for 'Spares Contacted', 'Deps Contacted', or queue states
-  return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Solid Yellow/Orange Cascade
+  return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
 }
 
 function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
@@ -42,26 +37,6 @@ function CellContent({ status, playerName, spareName, approachedList, currentInd
   }
   return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '13px' }}>No Response</span>;
 }
-  if (avail.status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
-  
-  if (avail.status === 'Spare Assigned') {
-    let spareName = players.find((p) => p.id === avail.spare_player_id)?.name;
-    if (!spareName && avail.approached_spares) {
-      const extSpare = avail.approached_spares.find((s: any) => s.id === avail.spare_player_id);
-      if (extSpare) spareName = extSpare.name;
-    }
-    return { label: spareName ? `Dep: ${spareName.split(' ')[0]}` : 'Dep Covered', color: '#1e40af' };
-  }
-  
-  if (avail.status === 'Spares Contacted' || avail.status === 'Deps Contacted') {
-    const currentIdx = avail.current_approach_index ?? 0;
-    const currentSpare = avail.approached_spares?.[currentIdx];
-    return { label: currentSpare ? `Asked: ${currentSpare.name.split(' ')[0]}` : 'Checking Deps...', color: '#9a3412' }; 
-  }
-  
-  return { label: '—', color: '#9ca3af' };
-}
-
 export default function BandView() {
   const params = new URLSearchParams(window.location.search);
   const uid = params.get('uid');
