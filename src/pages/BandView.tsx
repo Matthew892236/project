@@ -25,8 +25,8 @@ type Availability = {
 function statusColor(status: string) {
   if (status === 'Available') return '#dcfce7'; 
   if (status === 'Not Available') return '#fee2e2'; 
-  if (status === 'Dep Assigned') return '#dbeafe'; 
-  if (status === 'Deps Contacted') return '#ffedd5'; 
+  if (status === 'Spare Assigned') return '#dbeafe'; 
+  if (status === 'Spares Contacted' || status === 'Deps Contacted') return '#ffedd5'; 
   return '#f3f4f6'; 
 }
 
@@ -43,16 +43,16 @@ function statusText(avail: Availability, players: Player[]) {
   
   if (avail.status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
   
-  if (avail.status === 'Dep Assigned') {
+  if (avail.status === 'Spare Assigned') {
     let spareName = players.find((p) => p.id === avail.spare_player_id)?.name;
     if (!spareName && avail.approached_spares) {
       const extSpare = avail.approached_spares.find((s: any) => s.id === avail.spare_player_id);
       if (extSpare) spareName = extSpare.name;
     }
-return { label: spareName ? `Dep: ${spareName.split(' ')[0]}` : 'Dep Covered', color: '#1e40af' };
+    return { label: spareName ? `Dep: ${spareName.split(' ')[0]}` : 'Dep Covered', color: '#1e40af' };
   }
   
-  if (avail.status === 'Deps Contacted') {
+  if (avail.status === 'Spares Contacted' || avail.status === 'Deps Contacted') {
     const currentIdx = avail.current_approach_index ?? 0;
     const currentSpare = avail.approached_spares?.[currentIdx];
     return { label: currentSpare ? `Asked: ${currentSpare.name.split(' ')[0]}` : 'Checking Deps...', color: '#9a3412' }; 

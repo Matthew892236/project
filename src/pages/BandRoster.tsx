@@ -346,7 +346,8 @@ export default function BandRoster() {
   const displayInstruments = Array.from(new Set([...bandInstruments, ...existingInstruments]));
   
   const filteredInstruments = displayInstruments.filter(inst => {
-    const seatPlayers = activePlayers.filter(p => p.instrument === inst || (p.tags && p.tags.includes(inst)));
+    // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
+    const seatPlayers = activePlayers.filter(p => p.instrument === inst);
     if (hideEmpty && seatPlayers.length === 0) return false;
     if (searchQuery.trim() !== '') {
       return inst.toLowerCase().includes(searchQuery.toLowerCase()) || seatPlayers.some(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -393,7 +394,8 @@ export default function BandRoster() {
               
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {filteredInstruments.map(inst => {
-                  const seatPlayers = activePlayers.filter(p => p.instrument === inst || (p.tags && p.tags.includes(inst)));
+                  // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
+                  const seatPlayers = activePlayers.filter(p => p.instrument === inst);
                   const visiblePlayers = searchQuery.trim() !== '' ? seatPlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) : seatPlayers;
                   return (
                     <div key={inst} style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #f1f5f9', minHeight: '38px' }}>
@@ -534,39 +536,4 @@ export default function BandRoster() {
       )}
 
       {emailModalOpen && activeEmailPlayer && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Message {activeEmailPlayer.name}</h3>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Direct dispatch to ({activeEmailPlayer.email})</span>
-              </div>
-              <button type="button" onClick={() => setEmailModalOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSendEmail} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Email Topic / Reference</label>
-                <select value={emailContext} onChange={e => setEmailContext(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
-                  <option value="general">General Message (No gig reference)</option>
-                  {concerts.map(concert => (
-                    <option key={concert.id} value={concert.id}>Regarding Gig: {concert.name} ({new Date(concert.concert_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Message Content</label>
-                <textarea required rows={5} value={emailMessage} onChange={e => setEmailMessage(e.target.value)} placeholder="Type your notice description here..." style={{ padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setEmailModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
-                <button type="submit" disabled={sendingEmail} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><Send size={14} /> {sendingEmail ? 'Dispatching...' : 'Send Message'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {toast && <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', zIndex: 10000, fontWeight: 500 }}>{toast}</div>}
-    </div>
-  );
-}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}></div>

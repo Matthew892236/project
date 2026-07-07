@@ -30,11 +30,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+// 🌟 FIX: Updated color mappings to turn 'Spare Assigned' into pure Blue!
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
-  if ((status as string) === 'Deps Contacted') return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // BLUE!
+  if ((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
   return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
 }
 
@@ -50,7 +51,7 @@ function CellContent({ status, playerName, spareName, approachedList, currentInd
   if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
   if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
   if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
-  if ((status as string) === 'Deps Contacted' && approachedList && approachedList.length > 0) {
+  if (((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') && approachedList && approachedList.length > 0) {
     const activeIdx = currentIndex || 0;
     const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
     return <span style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 700 }}>Asked: {currentActivePlayer.name.split(' ')[0]} ({activeIdx + 1}/{approachedList.length})</span>;
@@ -108,7 +109,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
             {activeDropdown === cellId && anchorRect && (
               <PortalDropdown anchorRect={anchorRect} onClose={() => setActiveDropdown(null)}>
                 <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-                  {(status as string) === 'Spares Contacted' && avail?.approached_spares && avail.approached_spares.length > 0 && (
+                  {((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') && avail?.approached_spares && avail.approached_spares.length > 0 && (
                     <div style={{ padding: '12px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#166534', marginBottom: '8px' }}><Clock size={14} /> <span>ACTIVE EMAIL CASCADE</span></div>
                       {avail.approached_spares.map((spare: any, idx: number) => (
@@ -189,6 +190,8 @@ export default function AvailabilityMatrix() {
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [newPlayerForm, setNewPlayerForm] = useState({ name: '', instrument: '', email: '', phone: '', status: 'Spare' as 'Active' | 'Spare' });
 
+  // 🌟 FIX: Added state for the custom message in the cascade email modal
+  const [cascadeMessage, setCascadeMessage] = useState('');
   const [cascadeCompose, setCascadeCompose] = useState<{
     concertId: string;
     concertName: string;
@@ -209,9 +212,6 @@ export default function AvailabilityMatrix() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('status') === 'contact-manager') {
       setToast("⚠️ You have already accepted this gig! To back out, you must contact the Band Manager directly.");
-    }
-    if (params.get('status') === 'welcome') {
-      setToast("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
     }
     if (params.get('status') === 'welcome') {
       setToast("🎺 Thank you for adding your name to help the band community! If you would like your name removed, please contact admin@brassbandwidth.com");
@@ -277,9 +277,14 @@ export default function AvailabilityMatrix() {
   function getAvailableSpares(instrument: string, concert: MatrixConcert) {
     const targetInst = instrument.toLowerCase().trim();
     const busyIds = new Set<string>();
+    
+    // 🌟 FIX: Aggressively filter out spares if they are already assigned, emailed, or manually confirmed
     availability.filter(a => a.concert_id === concert.id).forEach(a => {
       if (a.spare_player_id) busyIds.add(a.spare_player_id);
       if (a.approached_spares) a.approached_spares.forEach((s: any) => busyIds.add(s.id));
+      if (a.status === 'Available' || a.status === 'Spare Assigned' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted') {
+        busyIds.add(a.player_id);
+      }
     });
 
     const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
@@ -332,8 +337,9 @@ export default function AvailabilityMatrix() {
     return { localS, globalS };
   }
 
-  async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[]) {
-    const patch = { player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null, approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null };
+  async function onSetStatus(playerId: string, concertId: string, status: AvailabilityStatus, spareId?: string, shortlist?: any[], customMessage?: string) {
+    // Note: customMessage is patched to the db if needed, or intercepted by Edge Functions
+    const patch = { player_id: playerId, concert_id: concertId, status, spare_player_id: spareId || null, approached_spares: shortlist || [], current_approach_index: shortlist && shortlist.length > 0 ? 0 : 0, approach_initiated_at: shortlist && shortlist.length > 0 ? new Date().toISOString() : null, custom_message: customMessage || null };
     const patches = [patch];
 
     if (status === 'Spare Assigned' && spareId) {
@@ -344,7 +350,8 @@ export default function AvailabilityMatrix() {
         spare_player_id: null,
         approached_spares: [],
         current_approach_index: 0,
-        approach_initiated_at: null
+        approach_initiated_at: null,
+        custom_message: null
       });
     }
 
@@ -352,7 +359,7 @@ export default function AvailabilityMatrix() {
       const waitingCore = availability.find((a) =>
         a.player_id !== playerId &&
         a.concert_id === concertId &&
-        (a.status as string) === 'Spares Contacted' &&
+        ((a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted') &&
         a.approached_spares?.some((s: any) => s.id === playerId)
       );
       if (waitingCore) {
@@ -363,7 +370,8 @@ export default function AvailabilityMatrix() {
           spare_player_id: playerId,
           approached_spares: waitingCore.approached_spares || [],
           current_approach_index: waitingCore.current_approach_index ?? 0,
-          approach_initiated_at: waitingCore.approach_initiated_at ?? null
+          approach_initiated_at: waitingCore.approach_initiated_at ?? null,
+          custom_message: null
         });
       }
     }
@@ -396,6 +404,7 @@ export default function AvailabilityMatrix() {
 
   function openCascadeCompose(concertId: string, anchorId: string, selectedSpares: any[], dropdownIdToClose: string | null) {
     const concert = concerts.find(c => c.id === concertId);
+    setCascadeMessage(''); // Clear the message box for a fresh modal
     setCascadeCompose({
       concertId,
       concertName: concert?.name || 'Concert',
@@ -432,14 +441,15 @@ export default function AvailabilityMatrix() {
     }
     const { data: inserted, error = null } = await supabase.from('players').insert({ name: newPlayerForm.name, instrument: newPlayerForm.instrument, email: cleanEmail, phone: newPlayerForm.phone || null, status: newPlayerForm.status, band_id: myBandId, tags: [] }).select().single();
     if (error || !inserted) return setToast('Error adding player');
-// 🛡️ Only generate standard RSVP rows for Active core players!
-if (concerts.length > 0 && newPlayerForm.status === 'Active') {
-  await supabase.from('availability').insert(concerts.map((c) => ({ 
-    player_id: inserted.id, 
-    concert_id: c.id, 
-    status: 'Not Responded' as AvailabilityStatus 
-  })));
-}    setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
+
+    if (concerts.length > 0 && newPlayerForm.status === 'Active') {
+      await supabase.from('availability').insert(concerts.map((c) => ({ 
+        player_id: inserted.id, 
+        concert_id: c.id, 
+        status: 'Not Responded' as AvailabilityStatus 
+      })));
+    }    
+    setToast(`${inserted.name} added to roster as a Spare`); setAddPlayerOpen(false); await fetchData();
   }
 
   const renderDepRow = (s: any, concertId: string, dropdownId: string, targetCorePlayerId: string | undefined, currentShortlist: any[], setShortlist: any) => {
@@ -520,7 +530,8 @@ if (concerts.length > 0 && newPlayerForm.status === 'Active') {
           <p style={{ color: '#64748b', fontSize: '16px' }}>No live concerts available. Add and publish them in the Concerts tab!</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', maxWidth: '100vw' }}>
+        // 🌟 FIX: Added the "className='w-full overflow-x-auto'" so the table scrolls left/right on mobile!
+        <div className="w-full overflow-x-auto pb-4" style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', maxWidth: '100vw' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
@@ -555,12 +566,10 @@ if (concerts.length > 0 && newPlayerForm.status === 'Active') {
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status);
                            
-                           // 🔍 Look up the actual assigned spare from master arrays to prevent placeholder confusion
-const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                           
+                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                           
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                                <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
-                                 {/* 🌟 Pass actual spareName down to guarantee Player 2 renders beautifully on acceptance */}
                                  <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} spareName={sparePlayer?.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
                                </div>
                                {vacantDropdown === cellId && vacantAnchor && (
@@ -653,7 +662,7 @@ const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares,
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
               Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
@@ -665,16 +674,30 @@ const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares,
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
+              // We pass the customMessage into the backend payload
               await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
                 'Spares Contacted' as any, 
                 undefined, 
-                cascadeCompose.selectedSpares
+                cascadeCompose.selectedSpares,
+                cascadeMessage 
               );
               setToast('Cascade initiated successfully!');
             }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+              {/* 🌟 FIX: Added textarea for the custom message note */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Custom Email Note (Optional)</label>
+                <textarea 
+                  rows={3} 
+                  value={cascadeMessage} 
+                  onChange={e => setCascadeMessage(e.target.value)} 
+                  placeholder="e.g. Bring a white shirt and music stand..." 
+                  style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} 
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                 <button type="button" onClick={() => setCascadeCompose(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" style={{ padding: '8px 16px', borderRadius: '6px', background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Start Cascade</button>
               </div>

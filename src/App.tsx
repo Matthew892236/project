@@ -63,7 +63,7 @@ function ResponseNotification() {
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>🌍</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Welcome to the Network!</h2>
             <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              Thank you for adding your name to help the band community! You are officially on the Global Dep Network. If you would like your name removed, please contact admin@brassbandwidth.com.
+              Thank you for adding your name to help the band community! You are officially on the Dep Network. If you would like your name removed, please contact admin@brassbandwidth.com.
             </p>
           </>
         ) : status === 'accepted' || status === 'available' ? (
@@ -110,7 +110,6 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasBand, setHasBand] = useState<boolean | null>(null);
   
-  // 🌟 NEW: Track Supabase's internal auth events
   const [authEvent, setAuthEvent] = useState<string | null>(null); 
 
   useEffect(() => {
@@ -120,7 +119,6 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      // 🌟 NEW: Record exactly what Supabase is doing (like a password reset)
       setAuthEvent(event); 
     });
 
