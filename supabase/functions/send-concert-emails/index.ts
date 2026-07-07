@@ -88,8 +88,8 @@ Deno.serve(async (req) => {
       `;
 
       if (showButtons) {
-        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-accept&t=${Date.now()}`;
-        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-decline&t=${Date.now()}`;
+const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-accept&t=${Date.now()}`;
+const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-decline&t=${Date.now()}`;
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
             <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>🎵 Event:</strong> ${concertNameDisplay}</p>
@@ -117,8 +117,7 @@ Deno.serve(async (req) => {
 
 if (!isAlreadyGlobal) {
         // 🌟 FIX: Point this directly to your Netlify URL instead of BASE_URL so they see the welcome popup box!
-        const globalNetworkLink = `https://brassbandwidth.netlify.app/?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
-        
+const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}`;        
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
 
