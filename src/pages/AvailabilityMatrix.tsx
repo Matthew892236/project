@@ -35,8 +35,9 @@ function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
   if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // BLUE!
-  if ((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
-  return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
+  if ((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') {
+    return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Orange/Yellow Cascade status
+  }
 }
 
 function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
