@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -18,33 +18,46 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { player_ids, general, subject, message, concert_id } = await req.json();
+    const body = await req.json();
+    
+    const concert_id = body.concert_id || body.concertId;
+    const player_ids = body.player_ids || body.playerIds;
+    const general = body.general;
+    const subject = body.subject || "";
+    const message = body.message;
 
-    // 1. Fetch Concert Details first so we have the band_id
     let concertDetails = null;
     if (concert_id) {
       const { data: concert } = await supabase
         .from('concerts')
         .select('*')
         .eq('id', concert_id)
-        .single();
+        .maybeSingle();
       concertDetails = concert;
     }
 
+    let derivedName = "Upcoming Performance";
+    if (subject && subject.includes(":")) {
+      derivedName = subject.split(":").pop()?.trim() || derivedName;
+    } else if (subject) {
+      derivedName = subject;
+    }
+
+    const concertNameDisplay = concertDetails?.name || concertDetails?.concert_name || concertDetails?.title || derivedName;
+    const concertDateDisplay = concertDetails?.concert_date || concertDetails?.date || "TBD";
+    const concertVenueDisplay = concertDetails?.venue || concertDetails?.location || "TBD";
+
     let players = [];
 
-    // 🌟 THE FIX: Intelligent Player Routing
     if (player_ids && player_ids.length > 0) {
-      // Manual list provided (e.g., Chase Non-Responders or Send Confirmed)
       const { data } = await supabase.from('players').select('*').in('id', player_ids);
       if (data) players = data;
     } else if (concertDetails?.band_id) {
-      // New Concert Publish: Grab ONLY Active Core Members!
       const { data } = await supabase
         .from('players')
         .select('*')
         .eq('band_id', concertDetails.band_id)
-        .eq('status', 'Active'); // 🛡️ Spares are completely ignored here!
+        .eq('status', 'Active');
       if (data) players = data;
     } else {
       return new Response(JSON.stringify({ error: "No players selected and no band context found." }), { status: 400, headers: corsHeaders });
@@ -54,7 +67,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Players not found" }), { status: 404, headers: corsHeaders });
     }
 
-    // 🌟 RESOLVE SENDER IDENTITY & REPLY-TO ROUTING
     let bandId = concertDetails?.band_id;
     if (!bandId && players && players.length > 0) {
       const corePlayer = players.find(p => p.band_id);
@@ -94,20 +106,21 @@ serve(async (req) => {
 
       let htmlBody = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">${subject}</h2>
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">Availability Request: ${concertNameDisplay} 🎺</h2>
           <p style="color: #334155; font-size: 16px;">Hi ${player.name.split(' ')[0]},</p>
-          <p style="color: #334155; font-size: 16px; white-space: pre-wrap;">${message}</p>
+          <p style="color: #334155; font-size: 16px;">Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.</p>
+          ${message ? `<p style="color: #334155; font-size: 14px; white-space: pre-wrap; font-style: italic; background: #f1f5f9; padding: 12px; border-radius: 6px;">${message}</p>` : ''}
       `;
 
       if (!general && concertDetails) {
-        // Cache-busting timestamps added to core player links just in case!
         const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-accept&t=${Date.now()}`;
         const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=core-decline&t=${Date.now()}`;
 
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
-            <p style="margin: 0 0 8px 0;"><strong>📅 Date:</strong> ${concertDetails.date || concertDetails.concert_date}</p>
-            <p style="margin: 0;"><strong>📍 Location:</strong> ${concertDetails.venue || concertDetails.location || 'TBD'}</p>
+            <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>🎵 Event:</strong> ${concertNameDisplay}</p>
+            <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>📅 Date:</strong> ${concertDateDisplay}</p>
+            <p style="margin: 0; color: #1e293b;"><strong>📍 Location:</strong> ${concertVenueDisplay}</p>
           </div>
 
           <div style="margin: 28px 0; text-align: center;">
@@ -119,7 +132,7 @@ serve(async (req) => {
       
       htmlBody += `
           <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #475569;">
-            <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline;">Click here to view the Live Band Availability Matrix</a></p>
+            <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>
       `;
 
       if (!player.is_global_spare) {
@@ -133,9 +146,19 @@ serve(async (req) => {
       }
 
       htmlBody += `
+            <div style="margin-top: 24px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+              <p style="margin: 0 0 6px 0;">
+                <strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network spare or listed on a local band roster for Brass Bandwidth.
+              </p>
+              <p style="margin: 0;">
+                Your contact data is processed strictly for coordinating performance bookings. To request data removal, update your active roster status, or exercise your right to erasure, please contact the platform administrator at <a href="mailto:admin@brassbandwidth.com" style="color: #64748b; text-decoration: underline;">admin@brassbandwidth.com</a>.
+              </p>
+            </div>
           </div>
         </div>
       `;
+
+      const finalSubject = subject.includes(concertNameDisplay) ? subject : `${subject} - ${concertNameDisplay}`;
 
       await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -147,7 +170,7 @@ serve(async (req) => {
           from: `"${bandName}" <Admin@brassbandwidth.com>`,
           reply_to: replyToEmail,
           to: player.email,
-          subject: subject,
+          subject: finalSubject,
           html: htmlBody,
         }),
       });
