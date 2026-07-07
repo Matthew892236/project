@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Grid3X3, Info, ShieldAlert, Music, Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { Grid3X3, Music, Calendar, MapPin, Users, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
-
+import type { Player, Concert } from '../lib/supabase';
 const STANDARD_INSTRUMENTS = [
   "Conductor", "Soprano Cornet", "Principal Cornet", "Solo Cornet", "Repiano Cornet",
   "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
