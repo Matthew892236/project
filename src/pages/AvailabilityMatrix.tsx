@@ -34,10 +34,14 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // BLUE!
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // Blue
+  
+  // 🌟 CHANGE THIS LINE: Make sure it checks for 'Spares Contacted' as well so it doesn't default to Green on refresh!
   if ((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') {
-    return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Orange/Yellow Cascade status
+    return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Orange/Yellow Cascade
   }
+  
+  return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
 }
 
 function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
@@ -95,8 +99,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const status: AvailabilityStatus = avail?.status || 'Not Responded';
         const activeQueueIndex = avail?.current_approach_index || 0;
         const cellId = `${player.id}-${concert.id}`;
-        const configColors = getCellStyle(status);
-        const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
+const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
         const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares].find((p: any) => p.id === avail.spare_player_id) : undefined;
         const totalSparesCount = localSparesList.length + globalSparesList.length;
 
@@ -566,7 +569,7 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
                         const totalSparesCount = localS.length + globalS.length;
 
                         if (fillingSpare) {
-                           const configColors = getCellStyle(fillingSpare.status);
+                           const configColors = getCellStyle(fillingSpare.status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
                            
                            const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                           
                            return (

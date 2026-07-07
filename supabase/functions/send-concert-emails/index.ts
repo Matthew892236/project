@@ -115,8 +115,10 @@ Deno.serve(async (req) => {
         (concertDetails && player.band_id !== concertDetails.band_id) || 
         (!player.band_id);
 
-      if (!isAlreadyGlobal) {
-        const globalNetworkLink = `${BASE_URL}?player_id=${player.id}&action=join-network&t=${Date.now()}`;
+if (!isAlreadyGlobal) {
+        // 🌟 FIX: Point this directly to your Netlify URL instead of BASE_URL so they see the welcome popup box!
+        const globalNetworkLink = `https://brassbandwidth.netlify.app/?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
+        
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
 
