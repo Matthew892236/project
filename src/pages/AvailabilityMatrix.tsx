@@ -492,12 +492,14 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
             style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >Email</button>
 
-          <button 
+<button 
             title="Directly assign to gig"
             onClick={(e) => { 
                e.stopPropagation();
                if (targetCorePlayerId) onSetStatus(targetCorePlayerId, concertId, 'Spare Assigned', s.id);
-               else onSetStatus(s.id, concertId, 'Available');
+               // 🌟 FIX: Force vacant seat assignments to use 'Spare Assigned' so they turn BLUE!
+               else onSetStatus(s.id, concertId, 'Spare Assigned');
+               
                if (dropdownId === vacantDropdown) setVacantDropdown(null);
                if (dropdownId === activeDropdown) setActiveDropdown(null);
             }}
@@ -666,14 +668,14 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
 
-            <form onSubmit={async (e) => {
+<form onSubmit={async (e) => {
               e.preventDefault();
               if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
               if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
-              // We pass the customMessage into the backend payload
+              // 1. Update the Database visually
               await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
@@ -682,7 +684,20 @@ newState.push({ id: `${p.player_id}-${p.concert_id}`, ...p, player: playerObj, c
                 cascadeCompose.selectedSpares,
                 cascadeMessage 
               );
-              setToast('Cascade initiated successfully!');
+
+              // 2. 🌟 NEW: ACTUALLY FIRE THE EMAIL ENGINE!
+              try {
+                await supabase.functions.invoke('send-concert-emails', {
+                  body: {
+                    concert_id: cascadeCompose.concertId,
+                    player_ids: cascadeCompose.selectedSpares.map((s: any) => s.id),
+                    message: cascadeMessage
+                  }
+                });
+                setToast('Cascade initiated & emails sent successfully!');
+              } catch (err) {
+                setToast('Database updated, but email dispatch failed.');
+              }
             }}>
               {/* 🌟 FIX: Added textarea for the custom message note */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
