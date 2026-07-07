@@ -26,7 +26,9 @@ Deno.serve(async (req) => {
     const player_ids = body.player_ids || body.playerIds;
     const general = body.general;
     const subject = body.subject || "";
-    const message = body.message;
+    
+    // 🌟 FIX: Safely catch the custom message no matter how the CRON/Frontend formats it
+    const message = body.message || body.customMessage || body.custom_message || null;
 
     let concertDetails = null;
     if (concert_id) {
@@ -106,7 +108,14 @@ Deno.serve(async (req) => {
             <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>
       `;
 
-      if (!player.is_global_spare) {
+      // 🌟 FIX: Hide the "Join Network" button ONLY from Global Spares.
+      // Local spares (who share the band_id) WILL still see the button!
+      const isAlreadyGlobal = 
+        player.is_global_spare === true || 
+        (concertDetails && player.band_id !== concertDetails.band_id) || 
+        (!player.band_id);
+
+      if (!isAlreadyGlobal) {
         const globalNetworkLink = `${BASE_URL}?player_id=${player.id}&action=join-network&t=${Date.now()}`;
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }

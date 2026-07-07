@@ -1,539 +1,283 @@
-import { useState, useEffect } from 'react';
-import { Users, Trash2, Loader2, Mail, GripVertical, Send, X, Edit, Search, Settings, ChevronUp, ChevronDown, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Music, Calendar, MapPin, Clock, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core'; 
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
-interface Player {
-  id: string;
-  name: string;
-  instrument: string;
-  email: string;
-  phone?: string;
-  status: string;
-  band_id: number;
-  sort_order?: number;
-  tags?: string[];
-}
-
-interface Concert {
-  id: string;
-  name: string;
-  concert_date: string;
-}
-
+// 🌟 STANDARD_INSTRUMENTS locally to prevent module import errors
 const STANDARD_INSTRUMENTS = [
-  "Conductor", "Soprano Cornet", "Principal Cornet", "Solo Cornet", "Repiano Cornet",
+  "Principal Cornet", "Solo Cornet", "Soprano Cornet", "Repiano Cornet",
   "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
   "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
-function EmptyChairDropzone({ instrument }: { instrument: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `empty-${instrument}` });
-  return (
-    <div ref={setNodeRef} style={{ color: '#94a3b8', fontSize: '13px', display: 'flex', alignItems: 'center', fontWeight: 500, backgroundColor: isOver ? '#e0f2fe' : '#f8fafc', border: isOver ? '1px dashed #0284c7' : '1px dashed #e2e8f0', padding: '6px 12px', borderRadius: '6px', width: 'fit-content', fontStyle: 'italic', transition: 'all 0.2s', minHeight: '32px' }}>
-      Position Vacant
-    </div>
-  );
+type Concert = { id: string; name: string; concert_date: string; start_time: string; end_time: string; location: string };
+type Player = { id: string; name: string; instrument: string; status: string; sort_order: number | null };
+
+type Availability = { 
+  player_id: string; 
+  concert_id: string; 
+  status: string; 
+  spare_player_id: string | null;
+  approached_spares?: any[];
+  current_approach_index?: number;
+};
+
+function statusColor(status: string) {
+  if (status === 'Available') return '#dcfce7'; 
+  if (status === 'Not Available') return '#fee2e2'; 
+  if (status === 'Spare Assigned') return '#dbeafe'; 
+  if (status === 'Spares Contacted' || status === 'Deps Contacted') return '#ffedd5'; 
+  return '#f3f4f6'; 
 }
 
-function SortablePlayerRow({ player, onDelete, onEmailClick, onEditClick }: { player: Player, onDelete: (p: Player) => void, onEmailClick: (p: Player) => void, onEditClick: (p: Player) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '4px 12px', 
-    backgroundColor: isDragging ? '#f8fafc' : '#ffffff',
-    border: isDragging ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-    borderRadius: '6px',
-    gap: '8px',
-    position: 'relative' as const,
-    zIndex: isDragging ? 50 : 1
-  };
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex', padding: '2px' }}>
-        <GripVertical size={14} />
-      </div>
-      
-      <div style={{ flex: 1, fontWeight: 600, color: '#0f172a', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          {player.name}
-          {player.tags && player.tags.filter(t => t.trim() !== '').map(tag => (
-            <span key={tag} style={{ fontSize: '10px', backgroundColor: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', border: '1px solid #e2e8f0', fontWeight: 500 }}>
-              {tag}
-            </span>
-          ))}
-        </div>
-        {player.status === 'Spare' && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>{player.instrument}</span>}
-      </div>
-
-      <div style={{ width: '80px' }}>
-        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, backgroundColor: player.status === 'Active' ? '#dcfce7' : '#fef3c7', color: player.status === 'Active' ? '#166534' : '#92400e' }}>
-          {player.status}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <button type="button" onClick={() => onEditClick(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', cursor: 'pointer' }}>
-          <Edit size={14} />
-        </button>
-        <button type="button" onClick={() => onEmailClick(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#eff6ff', color: '#3b82f6', border: 'none', cursor: 'pointer' }}>
-          <Mail size={14} />
-        </button>
-        <button type="button" onClick={() => onDelete(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#fef2f2', color: '#ef4444', border: 'none', cursor: 'pointer' }}>
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function BandRoster() {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [concerts, setConcerts] = useState<Concert[]>([]); 
-  const [bandId, setBandId] = useState<number | null>(null);
-  const [bandInstruments, setBandInstruments] = useState<string[]>(STANDARD_INSTRUMENTS);
-  const [manageSectionsOpen, setManageSectionsOpen] = useState(false);
-  const [editInstruments, setEditInstruments] = useState<string[]>([]);
-  const [newInstName, setNewInstName] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hideEmpty, setHideEmpty] = useState(false);
-
-  const [name, setName] = useState('');
-  const [instrument, setInstrument] = useState('');
-  const [customAddInstrument, setCustomAddInstrument] = useState('');
-  const [secondaryInstrumentsInput, setSecondaryInstrumentsInput] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [status, setStatus] = useState('Active');
-
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editPlayer, setEditPlayer] = useState<Player | null>(null);
-  const [editCustomInstrument, setEditCustomInstrument] = useState('');
-  const [editSecondaryInput, setEditSecondaryInput] = useState('');
-
-  const [emailModalOpen, setEmailModalOpen] = useState(false);
-  const [activeEmailPlayer, setActiveEmailPlayer] = useState<Player | null>(null);
-  const [emailContext, setEmailContext] = useState('general');
-  const [emailMessage, setEmailMessage] = useState('');
-  const [sendingEmail, setSendingEmail] = useState(false);
-
-  const [toast, setToast] = useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  useEffect(() => { fetchIsolatedRoster(); }, []);
-
-  async function fetchIsolatedRoster() {
-    setLoading(true);
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) return;
-      const { data: band } = await supabase.from('bands').select('*').eq('manager_id', userData.user.id).maybeSingle();
-      if (!band) return setLoading(false);
-      setBandId(band.id);
-      if (band.instrumentation && Array.isArray(band.instrumentation)) {
-        setBandInstruments(band.instrumentation);
-      }
-      const [rosterData, concertsData] = await Promise.all([
-        supabase.from('players').select('*').eq('band_id', band.id).order('sort_order'),
-        supabase.from('concerts').select('id, name, concert_date').eq('band_id', band.id).eq('status', 'live').order('concert_date')
-      ]);
-      if (rosterData.data) setPlayers(rosterData.data as Player[]);
-      if (concertsData.data) setConcerts(concertsData.data as Concert[]);
-    } catch (err: any) { setError(err.message || "Failed to load roster configuration."); } finally { setLoading(false); }
-  }
-
-  function openManageSections() {
-    setEditInstruments([...bandInstruments]);
-    setNewInstName('');
-    setManageSectionsOpen(true);
-  }
-
-  function moveInstUp(index: number) {
-    if (index === 0) return;
-    const newArr = [...editInstruments];
-    [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
-    setEditInstruments(newArr);
-  }
-
-  function moveInstDown(index: number) {
-    if (index === editInstruments.length - 1) return;
-    const newArr = [...editInstruments];
-    [newArr[index + 1], newArr[index]] = [newArr[index], newArr[index + 1]];
-    setEditInstruments(newArr);
-  }
-
-  function removeInst(index: number) {
-    setEditInstruments(prev => prev.filter((_, i) => i !== index));
-  }
-
-  function addInst() {
-    if (!newInstName.trim()) return;
-    setEditInstruments(prev => [...prev, newInstName.trim()]);
-    setNewInstName('');
-  }
-
-  async function saveInstrumentation() {
-    if (!bandId) return;
-    setSubmitting(true);
-    try {
-      const { error: updateError } = await supabase.from('bands').update({ instrumentation: editInstruments }).eq('id', bandId);
-      if (updateError) throw updateError;
-      setBandInstruments(editInstruments);
-      setSuccess("Instrumentation updated.");
-      setManageSectionsOpen(false);
-    } catch { setError("Database synchronization blocked."); } finally { setSubmitting(false); }
-  }
-
-  async function handleAddPlayer(e: React.FormEvent) {
-    e.preventDefault();
-    if (!bandId) return setError("No active band profile resolved.");
-    setSubmitting(true); setError(null); setSuccess(null);
-    const finalInstrument = instrument === 'custom' ? customAddInstrument.trim() : instrument;
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanTags = secondaryInstrumentsInput.split(',').map(t => t.trim()).filter(t => t !== '');
-
-    try {
-      const sectionPlayers = players.filter(p => p.instrument === finalInstrument);
-      const { data: newPlayer, error: insErr } = await supabase.from('players').insert({ name: name.trim(), instrument: finalInstrument, email: cleanEmail, phone: phone.trim() || null, status, band_id: bandId, sort_order: sectionPlayers.length, tags: cleanTags }).select().single();
-      if (insErr) throw insErr;
-      setPlayers(prev => [...prev, newPlayer as Player]);
-      setSuccess(`${name.trim()} added successfully!`);
-      setName(''); setInstrument(''); setCustomAddInstrument(''); setSecondaryInstrumentsInput(''); setEmail(''); setPhone(''); setStatus('Active');
-    } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
-  }
-
-  function openEditModal(player: Player) {
-    setEditPlayer({ ...player });
-    setEditCustomInstrument(bandInstruments.includes(player.instrument) ? '' : player.instrument);
-    setEditSecondaryInput(player.tags ? player.tags.join(', ') : '');
-    if (!bandInstruments.includes(player.instrument)) { setEditPlayer({ ...player, instrument: 'custom' }); }
-    setEditModalOpen(true);
-  }
-
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editPlayer) return;
-    setSubmitting(true);
-    const finalInstrument = editPlayer.instrument === 'custom' ? editCustomInstrument.trim() : editPlayer.instrument;
-    const cleanTags = editSecondaryInput.split(',').map(t => t.trim()).filter(t => t !== '');
-
-    try {
-      const { error: upErr } = await supabase.from('players').update({ name: editPlayer.name.trim(), instrument: finalInstrument, email: editPlayer.email.trim().toLowerCase(), phone: editPlayer.phone?.trim() || null, status: editPlayer.status, tags: cleanTags }).eq('id', editPlayer.id);
-      if (upErr) throw upErr;
-      setPlayers(prev => prev.map(p => p.id === editPlayer.id ? { ...editPlayer, instrument: finalInstrument, tags: cleanTags } : p));
-      setSuccess("Profile updated.");
-      setEditModalOpen(false);
-    } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
-  }
-
-  async function handleDeletePlayer(player: Player) {
-    if (!bandId || !confirm(`Remove ${player.name}?`)) return;
-    try {
-      await supabase.from('players').delete().match({ id: player.id, band_id: bandId });
-      setPlayers(prev => prev.filter(p => p.id !== player.id));
-    } catch { setError("Security blocker active."); }
-  }
-
-  function openEmailModal(player: Player) {
-    setActiveEmailPlayer(player); setEmailContext('general'); setEmailMessage(''); setEmailModalOpen(true);
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const activePlayer = players.find(p => p.id === active.id);
-    if (!activePlayer) return;
-
-    const overIdStr = String(over.id);
-
-    if (activePlayer.status === 'Spare') {
-      const overPlayer = players.find(p => p.id === over.id);
-      if (!overPlayer || overPlayer.status !== 'Spare') return;
-      const section = players.filter(p => p.status === 'Spare');
-      const oldIdx = section.findIndex(p => p.id === active.id);
-      const newIdx = section.findIndex(p => p.id === over.id);
-      const reordered = arrayMove(section, oldIdx, newIdx);
-      setPlayers(prev => [...prev.filter(p => p.status !== 'Spare'), ...reordered]);
-      await Promise.all(reordered.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
-      return;
+function statusText(avail: Availability, players: Player[]) {
+  if (avail.status === 'Available') {
+    // 🌟 If a vacant seat is filled, the player_id won't be in the core band. Let's pull their name!
+    const isCore = players.some(p => p.id === avail.player_id);
+    if (!isCore && avail.approached_spares) {
+      const spare = avail.approached_spares.find((s: any) => s.id === avail.player_id);
+      if (spare) return { label: `Covered: ${spare.name.split(' ')[0]}`, color: '#166534' };
     }
-
-    let targetInstrument = '';
-    let targetIndex = -1;
-
-    if (overIdStr.startsWith('empty-')) {
-      targetInstrument = overIdStr.replace('empty-', '');
-      targetIndex = 0;
-    } else {
-      const overPlayer = players.find(p => p.id === over.id);
-      if (overPlayer && overPlayer.status !== 'Spare') {
-        targetInstrument = overPlayer.instrument;
-        const section = players.filter(p => p.instrument === targetInstrument && p.status === 'Active');
-        targetIndex = section.findIndex(p => p.id === over.id);
-      }
-    }
-
-    if (!targetInstrument) return;
-
-    // 🌟 FULL FREEDOM: No isMoveAllowed checks. Move ANYONE to ANY SEAT.
-    let newPlayers = [...players];
-    const activeIdx = newPlayers.findIndex(p => p.id === activePlayer.id);
-
-    if (activePlayer.instrument === targetInstrument) {
-      // Reordering within the SAME section
-      const section = newPlayers.filter(p => p.instrument === targetInstrument && p.status === 'Active');
-      const oIdx = section.findIndex(p => p.id === active.id);
-      const nIdx = section.findIndex(p => p.id === over.id);
-      const reorderedSection = arrayMove(section, oIdx, nIdx);
-      setPlayers([...newPlayers.filter(p => !(p.instrument === targetInstrument && p.status === 'Active')), ...reorderedSection]);
-      await Promise.all(reorderedSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
-    } else {
-      // Moving to a DIFFERENT section
-      const movingPlayer = { ...newPlayers[activeIdx], instrument: targetInstrument };
-      newPlayers.splice(activeIdx, 1);
-      
-      const targetSection = newPlayers.filter(p => p.instrument === targetInstrument && p.status === 'Active');
-      targetSection.splice(targetIndex === -1 ? targetSection.length : targetIndex, 0, movingPlayer);
-      
-      const oldSection = newPlayers.filter(p => p.instrument === activePlayer.instrument && p.status === 'Active');
-      
-      const unchangedPlayers = newPlayers.filter(p => 
-         !(p.instrument === targetInstrument && p.status === 'Active') && 
-         !(p.instrument === activePlayer.instrument && p.status === 'Active')
-      );
-      
-      setPlayers([...unchangedPlayers, ...oldSection, ...targetSection]);
-      
-      await supabase.from('players').update({ instrument: targetInstrument }).eq('id', movingPlayer.id);
-      await Promise.all(targetSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
-      await Promise.all(oldSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
-    }
+    return { label: 'Available', color: '#166534' };
   }
-
-  async function handleSendEmail(e: React.FormEvent) {
-    e.preventDefault();
-    if (!activeEmailPlayer) return;
-    setSendingEmail(true);
-    const selectedConcert = concerts.find(c => c.id === emailContext);
-    const subjectLine = emailContext === 'general' ? `General Notice` : `Gig Notice: ${selectedConcert?.name}`;
-    try {
-      await supabase.functions.invoke('send-custom-email', { body: { to: activeEmailPlayer.email, subject: subjectLine, msg: emailMessage } });
-      setToast('Message dispatched.');
-    } catch { setError('Email routing error.'); } finally { setSendingEmail(false); setEmailModalOpen(false); }
-  }
-
-  const activePlayers = players.filter(p => p.status === 'Active');
-  const sparePlayers = players.filter(p => p.status === 'Spare');
-  const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
-  const displayInstruments = Array.from(new Set([...bandInstruments, ...existingInstruments]));
   
-  const filteredInstruments = displayInstruments.filter(inst => {
-    // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
-    const seatPlayers = activePlayers.filter(p => p.instrument === inst);
-    if (hideEmpty && seatPlayers.length === 0) return false;
-    if (searchQuery.trim() !== '') {
-      return inst.toLowerCase().includes(searchQuery.toLowerCase()) || seatPlayers.some(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  if (avail.status === 'Not Available') return { label: 'Not Available', color: '#991b1b' };
+  
+  if (avail.status === 'Spare Assigned') {
+    let spareName = players.find((p) => p.id === avail.spare_player_id)?.name;
+    if (!spareName && avail.approached_spares) {
+      const extSpare = avail.approached_spares.find((s: any) => s.id === avail.spare_player_id);
+      if (extSpare) spareName = extSpare.name;
     }
-    return true;
-  });
+    return { label: spareName ? `Dep: ${spareName.split(' ')[0]}` : 'Dep Covered', color: '#1e40af' };
+  }
+  
+  if (avail.status === 'Spares Contacted' || avail.status === 'Deps Contacted') {
+    const currentIdx = avail.current_approach_index ?? 0;
+    const currentSpare = avail.approached_spares?.[currentIdx];
+    return { label: currentSpare ? `Asked: ${currentSpare.name.split(' ')[0]}` : 'Checking Deps...', color: '#9a3412' }; 
+  }
+  
+  return { label: '—', color: '#9ca3af' };
+}
 
-  const visibleSpares = searchQuery.trim() !== '' 
-    ? sparePlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : sparePlayers;
+export default function BandView() {
+  const params = new URLSearchParams(window.location.search);
+  const uid = params.get('uid');
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}><Loader2 className="animate-spin" /> Loading Roster Dashboard...</div>;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [bandName, setBandName] = useState('');
+  const [concerts, setConcerts] = useState<Concert[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
+
+  useEffect(() => {
+    if (!uid) { setError('Invalid link — no band ID provided.'); setLoading(false); return; }
+    fetchPublicData();
+  }, [uid]);
+
+  async function fetchPublicData() {
+    try {
+      const { data: bandData } = await supabase.from('bands').select('id, name').eq('id', uid).single();
+      if (!bandData) throw new Error("Band not found.");
+      setBandName(bandData.name);
+
+      const [concertsRes, playersRes, availabilityRes] = await Promise.all([
+        supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
+        supabase.from('players').select('id, name, instrument, status, sort_order').eq('band_id', bandData.id).order('sort_order'),
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
+      ]);
+
+      setConcerts(concertsRes.data || []);
+      setPlayers(playersRes.data || []);
+      setAvailability(availabilityRes.data || []);
+    } catch (err: any) {
+      setError('Failed to load band schedule.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getStatus(playerId: string, concertId: string): Availability {
+    return availability.find((a) => a.player_id === playerId && a.concert_id === concertId)
+      ?? { player_id: playerId, concert_id: concertId, status: 'Not Responded', spare_player_id: null };
+  }
+
+  const activePlayers = players.filter((p) => p.status === 'Active');
+  
+  // 🌟 FIXED: Removed the filter so it shows ALL standard instruments, even if vacant
+  const existingInstruments = Array.from(new Set(players.map(p => p.instrument)));
+  const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments]));
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'system-ui, sans-serif', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
-      
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <Users size={28} color="#1e3a5f" />
-        <div><h1 style={{ fontSize: '24px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster</h1></div>
-      </div>
-
-      {error && <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>{error}</div>}
-      {success && <div style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>{success}</div>}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div style={{ flex: '1 1 600px', minWidth: '300px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#fff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input type="text" placeholder="Search roster..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
-                <input type="checkbox" checked={hideEmpty} onChange={e => setHideEmpty(e.target.checked)} style={{ width: '14px', height: '14px' }} /> Hide Empty Chairs
-              </label>
-            </div>
-
-            <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ padding: '10px 16px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Current Instrumentation Grid</h2>
-                 <button onClick={openManageSections} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}><Settings size={12} /> Edit Sections</button>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {filteredInstruments.map(inst => {
-                  // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
-                  const seatPlayers = activePlayers.filter(p => p.instrument === inst);
-                  const visiblePlayers = searchQuery.trim() !== '' ? seatPlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) : seatPlayers;
-                  return (
-                    <div key={inst} style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #f1f5f9', minHeight: '38px' }}>
-                      <div style={{ width: '180px', padding: '8px 14px', backgroundColor: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '13px', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>{inst}</div>
-                      <div style={{ flex: '1 1 300px', padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#ffffff' }}>
-                        <SortableContext id={`context-${inst}`} items={visiblePlayers.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                          {visiblePlayers.length > 0 ? visiblePlayers.map(p => (
-                            <SortablePlayerRow key={p.id} player={p} onDelete={handleDeletePlayer} onEmailClick={openEmailModal} onEditClick={openEditModal} />
-                          )) : <EmptyChairDropzone instrument={inst} />}
-                        </SortableContext>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {visibleSpares.length > 0 && (
-              <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                <div style={{ padding: '10px 16px', backgroundColor: '#1e3a5f', borderBottom: '1px solid #e2e8f0' }}><h2 style={{ fontSize: '14px', margin: 0, color: '#ffffff', fontWeight: 700 }}>Local Band Spares / Dep List</h2></div>
-                <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#ffffff' }}>
-                  <SortableContext id="context-spares" items={visibleSpares.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                    {visibleSpares.map(p => (
-                      <SortablePlayerRow key={p.id} player={p} onDelete={handleDeletePlayer} onEmailClick={openEmailModal} onEditClick={openEditModal} />
-                    ))}
-                  </SortableContext>
-                </div>
-              </div>
-            )}
-          </div>
-        </DndContext>
-
-        <div style={{ flex: '1 1 300px', minWidth: '260px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', position: 'sticky', top: '24px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', margin: '0 0 12px 0' }}>Add Musician</h2>
-          <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
-            <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px', outline: 'none' }}>
-              <option value="">Primary instrument...</option>
-              {bandInstruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}
-              <option value="custom">+ Custom Instrument...</option>
-            </select>
-            {instrument === 'custom' && <input type="text" required value={customAddInstrument} onChange={e => setCustomAddInstrument(e.target.value)} placeholder="Custom instrument name..." style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #2563eb', fontSize: '13px', backgroundColor: '#eff6ff' }} />}
-            <input type="text" value={secondaryInstrumentsInput} onChange={e => setSecondaryInstrumentsInput(e.target.value)} placeholder="Secondary Instruments (e.g. Solo Horn, 1st Horn)" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
-            <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px' }}>
-              <option value="Active">Active Core Player</option>
-              <option value="Spare">Local Spare / Dep</option>
-            </select>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-            <button type="submit" disabled={submitting} style={{ padding: '10px', backgroundColor: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>{submitting ? 'Saving...' : 'Add Player'}</button>
-          </form>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ background: '#1e3a5f', padding: '24px 32px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+        <div style={{ backgroundColor: '#eab308', padding: '8px', borderRadius: '8px', display: 'flex' }}>
+          <Music size={24} color="#1e3a5f" />
+        </div>
+        <div>
+          <h1 style={{ color: 'white', margin: 0, fontSize: '20px', fontWeight: 700 }}>{bandName || 'Band Schedule'}</h1>
+          <p style={{ color: '#93c5fd', margin: '2px 0 0', fontSize: '13px' }}>Read-only availability matrix</p>
         </div>
       </div>
 
-      {manageSectionsOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Manage Instrumentation</h3>
-              <button type="button" onClick={() => setManageSectionsOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {editInstruments.map((inst, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{inst}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button onClick={() => moveInstUp(idx)} disabled={idx === 0} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer' }}><ChevronUp size={16}/></button>
-                      <button onClick={() => moveInstDown(idx)} disabled={idx === editInstruments.length - 1} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer' }}><ChevronDown size={16}/></button>
-                      <button onClick={() => removeInst(idx)} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={16}/></button>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '80px', color: '#64748b', fontSize: '15px' }}>Loading Schedule...</div>
+        ) : error ? (
+          <div style={{ textAlign: 'center', padding: '80px', color: '#991b1b', fontWeight: 600 }}>{error}</div>
+        ) : concerts.length === 0 ? (
+          <div style={{ background: 'white', borderRadius: '12px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+            <Calendar size={40} color="#cbd5e1" style={{ margin: '0 auto 16px' }} />
+            <p style={{ color: '#64748b', fontSize: '15px' }}>No upcoming concerts scheduled.</p>
+          </div>
+        ) : (
+          <>
+            {/* Concert cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+              {concerts.map((c) => {
+                const available = availability.filter((a) => a.concert_id === c.id && (a.status === 'Available' || a.status === 'Spare Assigned')).length;
+                const total = activePlayers.length;
+                return (
+                  <div key={c.id} style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{c.name}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Calendar size={14} color="#64748b" /> {new Date(c.concert_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={14} color="#64748b" /> {c.start_time.slice(0, 5)} – {c.end_time.slice(0, 5)}
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={14} color="#64748b" /> {c.location}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '16px', fontSize: '13px', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', backgroundColor: '#dcfce7', padding: '6px 12px', borderRadius: '6px', width: 'fit-content' }}>
+                      <Users size={14} style={{ marginRight: '6px' }} />{available}/{total} available
                     </div>
                   </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <input type="text" value={newInstName} onChange={e => setNewInstName(e.target.value)} placeholder="Add new section name..." style={{ flex: 1, padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-                <button type="button" onClick={addInst} style={{ padding: '10px 16px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /></button>
-              </div>
+                );
+              })}
             </div>
-            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#fff' }}>
-              <button type="button" onClick={() => setManageSectionsOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
-              <button type="button" onClick={saveInstrumentation} disabled={submitting} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>{submitting ? 'Saving...' : 'Save Configuration'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {editModalOpen && editPlayer && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#ffffff', width: '400px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Edit Player Profile</h3>
-              <button type="button" onClick={() => setEditModalOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleEditSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Name</label>
-                <input type="text" required value={editPlayer.name} onChange={e => setEditPlayer({...editPlayer, name: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Primary Instrument</label>
-                <select required value={editPlayer.instrument} onChange={e => setEditPlayer({...editPlayer, instrument: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
-                  {bandInstruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}
-                  <option value="custom">+ Custom / Other...</option>
-                </select>
-                {editPlayer.instrument === 'custom' && (
-                  <input type="text" required value={editCustomInstrument} onChange={e => setEditCustomInstrument(e.target.value)} placeholder="Type custom instrument name..." style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #2563eb', fontSize: '14px', backgroundColor: '#eff6ff', marginTop: '4px' }} />
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Secondary Instruments / Tags</label>
-                <input type="text" value={editSecondaryInput} onChange={e => setEditSecondaryInput(e.target.value)} placeholder="e.g. Solo Horn, 2nd Cornet" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Status</label>
-                <select required value={editPlayer.status} onChange={e => setEditPlayer({...editPlayer, status: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
-                  <option value="Active">Active Core Player</option>
-                  <option value="Spare">Local Spare / Dep</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Email</label>
-                  <input type="email" required value={editPlayer.email} onChange={e => setEditPlayer({...editPlayer, email: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Phone</label>
-                  <input type="tel" value={editPlayer.phone || ''} onChange={e => setEditPlayer({...editPlayer, phone: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setEditModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
-                <button type="submit" disabled={submitting} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            {/* Availability grid */}
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '16px', fontWeight: 700, color: '#475569', position: 'sticky', left: 0, background: '#f8fafc', minWidth: '180px', borderRight: '1px solid #e2e8f0', zIndex: 10 }}>Core Musician</th>
+                      {concerts.map((c) => (
+                        <th key={c.id} style={{ padding: '16px', textAlign: 'center', fontWeight: 700, color: '#1e3a5f', borderRight: '1px solid #e2e8f0', minWidth: '160px' }}>
+                          <span style={{ display: 'block' }}>{c.name}</span>
+                          <span style={{ display: 'block', fontWeight: 500, color: '#64748b', fontSize: '12px', marginTop: '4px' }}>{new Date(c.concert_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayInstruments.map((instrument) => {
+                      const section = activePlayers.filter((p) => p.instrument === instrument);
+                      
+                      // 🌟 FIXED: If the section is empty, render the Position Vacant row
+                      if (section.length === 0) {
+                        return [
+                          <tr key={`header-${instrument}`}>
+                            <td colSpan={concerts.length + 1} style={{ padding: '12px 16px', background: '#f1f5f9', fontSize: '13px', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>
+                              {instrument} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: '6px' }}>(0)</span>
+                            </td>
+                          </tr>,
+                          <tr key={`vacant-${instrument}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#94a3b8', position: 'sticky', left: 0, background: 'white', borderRight: '1px solid #e2e8f0', zIndex: 5, fontStyle: 'italic' }}>
+                              Position Vacant
+                            </td>
+                            {concerts.map((c) => {
+                              // Scan the database to see if a cascade email was sent for this vacant seat
+                              const vacantAvail = availability.find(a => 
+                                a.concert_id === c.id && 
+                                !activePlayers.some(p => p.id === a.player_id) && 
+                                a.approached_spares?.[0]?.instrument === instrument
+                              );
 
-      {emailModalOpen && activeEmailPlayer && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}></div>
+                              let label = '—';
+                              let color = '#9ca3af';
+                              let bg = '#f3f4f6';
+
+                              if (vacantAvail) {
+                                const statusInfo = statusText(vacantAvail, players);
+                                label = statusInfo.label;
+                                color = statusInfo.color;
+                                bg = statusColor(vacantAvail.status);
+                              }
+
+                              return (
+                                <td key={c.id} style={{ padding: '8px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
+                                  <span style={{ display: 'inline-block', background: bg, color, fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                                    {label}
+                                  </span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ];
+                      }
+
+                      return [
+                        <tr key={`header-${instrument}`}>
+                          <td colSpan={concerts.length + 1} style={{ padding: '12px 16px', background: '#f1f5f9', fontSize: '13px', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>
+                            {instrument} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: '6px' }}>({section.length})</span>
+                          </td>
+                        </tr>,
+                        ...section.map((player) => (
+                          <tr key={player.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', position: 'sticky', left: 0, background: 'white', borderRight: '1px solid #e2e8f0', zIndex: 5 }}>
+                              {player.name}
+                            </td>
+                            {concerts.map((c) => {
+                              const avail = getStatus(player.id, c.id);
+                              const { label, color } = statusText(avail, players);
+                              
+                              return (
+                                <td key={c.id} style={{ padding: '8px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
+                                  <span style={{
+                                    display: 'inline-block', background: statusColor(avail.status), color,
+                                    fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '6px', whiteSpace: 'nowrap'
+                                  }}>{label}</span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        )),
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {[
+                { bg: '#dcfce7', color: '#166534', label: 'Available / Covered' },
+                { bg: '#fee2e2', color: '#991b1b', label: 'Not Available' },
+                { bg: '#dbeafe', color: '#1e40af', label: 'Dep Assigned' },
+                { bg: '#ffedd5', color: '#9a3412', label: 'Deps Contacted' },
+                { bg: '#f3f4f6', color: '#9ca3af', label: 'Not Responded / Vacant' },
+              ].map(({ bg, color, label }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#475569' }}>
+                  <span style={{ display: 'inline-block', width: '14px', height: '14px', borderRadius: '4px', background: bg, border: `1px solid ${color}30` }} />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '13px', fontWeight: 500 }}>
+        BrassBandwidth — Live Schedule Sync
+      </div>
+    </div>
+  );
+}
