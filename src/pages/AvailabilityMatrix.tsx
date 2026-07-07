@@ -34,7 +34,11 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 function getCellStyle(status: AvailabilityStatus) {
   if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
   if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // Blue
+  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; // Pure Blue
+  
+  // 🌟 FIX: Catch-all for 'Spares Contacted', 'Deps Contacted', or any temporary queue state
+  return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; // Solid Yellow/Orange Cascade
+}
   
   // 🌟 CHANGE THIS LINE: Make sure it checks for 'Spares Contacted' as well so it doesn't default to Green on refresh!
   if ((status as string) === 'Deps Contacted' || (status as string) === 'Spares Contacted') {
