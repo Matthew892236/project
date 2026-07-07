@@ -21,14 +21,12 @@ Deno.serve(async (req) => {
 
     const { data: currentAvail } = await supabase.from('availability').select('*').match({ player_id, concert_id }).maybeSingle();
 
-    // 🛡️ Lockout Guardrail
     if (action === 'core-decline' || action === 'decline') {
       if (currentAvail && (currentAvail.status === 'Available' || currentAvail.status === 'Spare Assigned')) {
         return Response.redirect(`${FRONTEND_URL}?status=contact-manager`, 302);
       }
     }
 
-    // 🌟 CORE ACTION FIX: Force an upsert so they are never stranded on a blank page!
     if (action === 'core-accept') {
       await supabase.from('availability').upsert({ player_id, concert_id, status: 'Available' });
       return Response.redirect(`${FRONTEND_URL}?status=accepted`, 302);
@@ -38,17 +36,14 @@ Deno.serve(async (req) => {
       return Response.redirect(`${FRONTEND_URL}?status=declined`, 302);
     }
 
-    // 🌟 VACANT ROW CASCADE FIX
     if (action === 'accept' && spare_id) {
       const { data: anchorPlayer } = await supabase.from('players').select('status').eq('id', player_id).single();
       const isVacantCascade = anchorPlayer?.status === 'Spare';
 
       if (isVacantCascade) {
         if (spare_id === player_id) {
-          // The 1st spare accepted. Mark the row Available.
           await supabase.from('availability').update({ status: 'Available' }).match({ player_id, concert_id });
         } else {
-          // A 2nd or 3rd spare accepted. Keep the original placeholder row to lock the instrument in place, but map the new spare to it.
           await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: spare_id }).match({ player_id, concert_id });
         }
       } else {
