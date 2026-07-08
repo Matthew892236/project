@@ -2,11 +2,16 @@ import { useEffect, useState } from 'react';
 import { Music, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-// 🌟 FIX: Added 'update' mode to handle setting the new password!
 type Mode = 'login' | 'signup' | 'forgot' | 'update';
 
+// 🌟 THE TRAP: Grab the URL the exact millisecond this file loads, 
+// BEFORE Supabase has time to strip the recovery token out of the address bar!
+const initialUrl = window.location.href;
+const isRecoveryMode = initialUrl.includes('type=recovery');
+
 export default function Login() {
-  const [mode, setMode] = useState<Mode>('login');
+  // Use our trapped variable to set the default state!
+  const [mode, setMode] = useState<Mode>(isRecoveryMode ? 'update' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -14,13 +19,14 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // 🌟 FIX: Automatically detect if they arrived via a password reset link
   useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
-    if (hash.includes('type=recovery') || search.includes('type=recovery')) {
-      setMode('update');
-    }
+    // 🌟 SECONDARY NET: Listen to Supabase's internal alert system directly
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode('update');
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -31,14 +37,14 @@ export default function Login() {
 
     try {
       if (mode === 'update') {
-        // 🌟 FIX: Securely submit the new password to Supabase
+        // Securely submit the new password
         const { error: updateError } = await supabase.auth.updateUser({ password });
         if (updateError) throw updateError;
         
         setSuccessMessage('Password successfully updated! You are now logged in.');
         setMode('login');
         setPassword('');
-        // Clean up the URL so they don't get stuck in a recovery loop
+        // Clean up the URL completely so they don't get stuck in a loop
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({ 
