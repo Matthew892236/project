@@ -1,12 +1,10 @@
-TypeScript
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, AlertCircle, Calendar, MapPin, Clock, Music, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Calendar, MapPin, Clock, Music, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Concert, AvailabilityStatus } from '../lib/supabase';
 
-type State = 'loading' | 'success' | 'error';
-type Mode = 'concert' | 'registry-opt-in';
+type State = 'loading' | 'ready' | 'submitting' | 'done' | 'error' | 'success';
+type Mode = 'concert' | 'registry';
 
 interface TokenData {
   player: { id: string; name: string; instrument: string; band_id?: string | null };
@@ -16,7 +14,10 @@ interface TokenData {
 }
 
 interface RegistryData {
-  player: { id: string; name: string; instrument: string };
+  id: string;
+  name: string;
+  instrument: string;
+  bands?: any;
 }
 
 export default function Respond() {
@@ -32,21 +33,12 @@ export default function Respond() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    // 🌟 THE FIX: If the URL has a status, quietly stop right here. 
-    // This prevents the "No response token provided" error from ever triggering!
     if (quickResponse) return;
-
-    if (!token) { 
-      setState('error'); 
-      setErrorMsg('No response token provided.'); 
-      return; 
-    }
+    if (!token) { setState('error'); setErrorMsg('No response token provided.'); return; }
     determineTokenRoute();
   }, [token, quickResponse]);
 
-  // 🌟 THE FIX: If a status popup is active, render absolutely nothing in the background.
   if (quickResponse) return null;
-
   // 🕵️‍♂️ Step 1: Detect what type of invitation link was clicked
   async function determineTokenRoute() {
     try {

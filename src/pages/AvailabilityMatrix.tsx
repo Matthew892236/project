@@ -674,16 +674,15 @@ export default function AvailabilityMatrix() {
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
-              await onSetStatus(
+await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
                 'Spares Contacted' as any, 
                 undefined, 
                 cascadeCompose.selectedSpares,
                 cascadeMessage,
-                cascadeCompose.targetInstrument 
+                cascadeCompose.targetInstrument || undefined 
               );
-
               try {
                 await supabase.functions.invoke('send-concert-emails', {
                   body: {
