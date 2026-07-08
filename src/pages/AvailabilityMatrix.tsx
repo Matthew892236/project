@@ -135,7 +135,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
 
         return (
           <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '170px' }}>
-            <div onClick={(e) => handleCellClick(e, cellId)} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
+            <div onClick={(e) => handleCellClick(e, cellId)} style={{ padding: '2px 6px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
               <CellContent status={status} playerName={player.name} spareName={sparePlayer?.name} approachedList={avail?.approached_spares} currentIndex={activeQueueIndex} />
               <ChevronDown size={14} style={{ opacity: 0.5 }} />
             </div>
@@ -574,8 +574,7 @@ const fillingSpare = availability.find(a =>
                            const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                               <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
-                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} spareName={sparePlayer?.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
+<div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '2px 6px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>                                 <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} spareName={sparePlayer?.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
                                </div>
                                {vacantDropdown === cellId && vacantAnchor && (
                                  <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
@@ -588,8 +587,7 @@ const fillingSpare = availability.find(a =>
                         }
                         return (
                           <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                            <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600 }}>
-                              <Search size={14} style={{ marginRight: '6px' }} /> Find Dep
+<div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '2px 6px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600 }}>                              <Search size={14} style={{ marginRight: '6px' }} /> Find Dep
                             </div>
                             {vacantDropdown === cellId && vacantAnchor && (
                               <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
