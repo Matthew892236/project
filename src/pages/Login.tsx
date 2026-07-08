@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Music, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type Mode = 'login' | 'signup' | 'forgot';
+// 🌟 FIX: Added 'update' mode to handle setting the new password!
+type Mode = 'login' | 'signup' | 'forgot' | 'update';
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login');
@@ -13,6 +14,15 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // 🌟 FIX: Automatically detect if they arrived via a password reset link
+  useEffect(() => {
+    const hash = window.location.hash;
+    const search = window.location.search;
+    if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+      setMode('update');
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -20,8 +30,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      if (mode === 'signup') {
-        // 🌟 FIXED: Added the emailRedirectTo option to force a clickable link instead of a code!
+      if (mode === 'update') {
+        // 🌟 FIX: Securely submit the new password to Supabase
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) throw updateError;
+        
+        setSuccessMessage('Password successfully updated! You are now logged in.');
+        setMode('login');
+        setPassword('');
+        // Clean up the URL so they don't get stuck in a recovery loop
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (mode === 'signup') {
         const { error: signUpError } = await supabase.auth.signUp({ 
           email, 
           password,
@@ -55,17 +74,15 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          {/* 🌟 MATCHING BATCH 1 BRANDING: Yellow Logo Box */}
           <div style={{ backgroundColor: '#eab308', padding: '12px', borderRadius: '12px', display: 'inline-flex', marginBottom: '16px' }}>
             <Music size={32} color="#1e3a5f" />
           </div>
           <h1>Brassbandwidth</h1>
           <p>
-            {mode === 'login' 
-              ? 'Free Brass Band Management Tool' 
-              : mode === 'signup' 
-              ? 'Create your band account' 
-              : 'Enter your email to receive a recovery link'}
+            {mode === 'login' ? 'Free Brass Band Management Tool' 
+             : mode === 'signup' ? 'Create your band account' 
+             : mode === 'update' ? 'Securely set your new password'
+             : 'Enter your email to receive a recovery link'}
           </p>
         </div>
 
@@ -77,16 +94,27 @@ export default function Login() {
             </div>
           )}
 
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="band@example.com" required autoFocus />
-          </div>
+          {/* Hide the email box if they are just typing a new password */}
+          {mode !== 'update' && (
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="band@example.com" required autoFocus />
+            </div>
+          )}
 
           {mode !== 'forgot' && (
             <div className="form-group">
-              <label>Password</label>
+              <label>{mode === 'update' ? 'New Password' : 'Password'}</label>
               <div className="input-with-icon">
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Create a secure password' : 'Enter your password'} required minLength={6} />
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder={mode === 'signup' ? 'Create a secure password' : mode === 'update' ? 'Enter new password' : 'Enter your password'} 
+                  required 
+                  minLength={6} 
+                  autoFocus={mode === 'update'} 
+                />
                 <button type="button" className="input-icon-btn" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -103,12 +131,14 @@ export default function Login() {
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="btn btn-primary login-submit" disabled={loading} style={{ backgroundColor: '#1e3a5f' }}>
-            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Register Account' : 'Send Reset Link'}
+            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Register Account' : mode === 'update' ? 'Save New Password' : 'Send Reset Link'}
           </button>
         </form>
 
         <div className="login-footer">
-          {mode === 'forgot' ? (
+          {mode === 'update' ? (
+            <p>Remembered it? <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); window.history.replaceState({}, document.title, window.location.pathname); }}>Back to Login</button></p>
+          ) : mode === 'forgot' ? (
             <p>Remember your password? <button className="link-btn" onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}>Sign in</button></p>
           ) : mode === 'login' ? (
             <p>Don't have an account? <button className="link-btn" onClick={() => { setMode('signup'); setError(null); setSuccessMessage(null); }}>Create one</button></p>
