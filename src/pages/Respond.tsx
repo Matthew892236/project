@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Calendar, MapPin, Clock, Music, Loader } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Concert, AvailabilityStatus } from '../lib/supabase';
