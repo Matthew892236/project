@@ -53,12 +53,13 @@ if (status === 'Spare Assigned') {
     return { label: spare ? spare.name : 'Dep Assigned', color: '#1e40af' };
   }
   
-  if (status === 'Deps Contacted' || status === 'Spares Contacted') {
+if (status === 'Deps Contacted' || status === 'Spares Contacted') {
     const list = avail.approached_spares || [];
     const idx = avail.current_approach_index || 0;
     const activePlayer = list[idx] || list[0];
     return { 
-      label: activePlayer ? `Asked: ${activePlayer.name.split(' ')[0]} (${idx + 1}/${list.length})` : 'Asked Dep...', 
+      // 🌟 FIX: Renders the full name safely so it doesn't blank out the matrix
+      label: activePlayer ? `Asked: ${activePlayer.name} (${idx + 1}/${list.length})` : 'Asked Dep...', 
       color: '#92400e' 
     };
   }

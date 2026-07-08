@@ -1,104 +1,93 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const FRONTEND_URL = "https://brassbandwidth.netlify.app";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    const url = new URL(req.url);
-    const player_id = url.searchParams.get('player_id') || url.searchParams.get('playerId');
-    const concert_id = url.searchParams.get('concert_id') || url.searchParams.get('concertId');
-    const action = url.searchParams.get('action');
+    const { pid: player_id, cid: concert_id, act: action } = await req.json();
 
     if (action === 'join-network' && player_id) {
       await supabase.from('players').update({ is_global_spare: true }).eq('id', player_id);
-      return Response.redirect(`${FRONTEND_URL}/respond?status=welcome`, 302);
+      return new Response(JSON.stringify({ status: 'welcome' }), { headers: corsHeaders });
     }
     
-    if (!player_id || !concert_id) return Response.redirect(`${FRONTEND_URL}/respond?status=invalid`, 302);
+    if (!player_id || !concert_id) return new Response(JSON.stringify({ status: 'invalid' }), { headers: corsHeaders });
 
-    // 🌟 SMART RADAR SCAN: Find the exact row this player belongs to
     const { data: allAvails } = await supabase.from('availability').select('*').eq('concert_id', concert_id);
-    let currentAvail = allAvails?.find(a => a.player_id === player_id); 
     
-    if (!currentAvail) {
-      currentAvail = allAvails?.find(a => a.approached_spares?.some((s: any) => s.id === player_id));
-    }
+    // 🌟 SMART RADAR V2: Find the EXACT row that explicitly asked for this specific spare!
+    let targetedAvail = allAvails?.find(a => a.approached_spares?.some((s: any) => s.id === player_id));
+    let anchor_player_id = targetedAvail ? targetedAvail.player_id : player_id;
 
-    const anchor_player_id = currentAvail ? currentAvail.player_id : player_id;
-
-    // 🛑 THE STRICT BOUNCER: If the gig is already filled (Green or Blue)
+    // The Bouncer
+    let currentAvail = targetedAvail || allAvails?.find(a => a.player_id === player_id);
     if (currentAvail && (currentAvail.status === 'Available' || currentAvail.status === 'Spare Assigned')) {
-       
-       // Rule 1: If anyone tries to decline an already-accepted gig, STOP THEM.
        if (action === 'core-decline' || action === 'decline' || action === 'dep-decline') {
-         return Response.redirect(`${FRONTEND_URL}/respond?status=contact-manager`, 302);
+         return new Response(JSON.stringify({ status: 'contact-manager' }), { headers: corsHeaders });
        }
-
-       // Rule 2: If a late spare tries to accept a gig someone else already took, STOP THEM.
        const isCore = player_id === currentAvail.player_id;
        const isAssignedSpare = player_id === currentAvail.spare_player_id;
-       
        if (!isCore && !isAssignedSpare) {
-         return Response.redirect(`${FRONTEND_URL}/respond?status=contact-manager`, 302);
+         return new Response(JSON.stringify({ status: 'contact-manager' }), { headers: corsHeaders });
        }
     }
-
-    // --- STANDARD PROCESSING FOR UNFILLED GIGS ---
 
     if (action === 'core-accept') {
       await supabase.from('availability').upsert({ player_id: anchor_player_id, concert_id, status: 'Available' }, { onConflict: 'player_id,concert_id' });
-      return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
+      return new Response(JSON.stringify({ status: 'accepted' }), { headers: corsHeaders });
     }
     
     if (action === 'core-decline') {
       await supabase.from('availability').upsert({ player_id: anchor_player_id, concert_id, status: 'Not Available' }, { onConflict: 'player_id,concert_id' });
-      return Response.redirect(`${FRONTEND_URL}/respond?status=declined`, 302);
+      return new Response(JSON.stringify({ status: 'declined' }), { headers: corsHeaders });
     }
 
     if (action === 'dep-accept' || action === 'accept') {
-      await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).match({ player_id: anchor_player_id, concert_id });
-      return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
+      if (targetedAvail) {
+        // They were explicitly requested! Lock them into the specific seat requested (Turns exact seat BLUE)
+        await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).match({ player_id: anchor_player_id, concert_id });
+      } else {
+        // They replied to a generic blast. Mark them generally available (Turns vacant seats GREEN)
+        await supabase.from('availability').upsert({ player_id: player_id, concert_id, status: 'Available' }, { onConflict: 'player_id,concert_id' });
+      }
+      return new Response(JSON.stringify({ status: 'accepted' }), { headers: corsHeaders });
     }
 
-if (action === 'dep-decline' || action === 'decline') {
-      if (currentAvail) {
-        const currentIndex = currentAvail.current_approach_index || 0;
-        const list = currentAvail.approached_spares || [];
+    if (action === 'dep-decline' || action === 'decline') {
+      if (targetedAvail) {
+        const currentIndex = targetedAvail.current_approach_index || 0;
+        const list = targetedAvail.approached_spares || [];
         
         if (list[currentIndex] && list[currentIndex].id === player_id) {
           const nextIndex = currentIndex + 1;
           
-          // 🌟 OPTIMISTIC LOCK: Only update if the index hasn't been changed by a scanner yet!
+          // 🌟 VIRUS SCANNER SHIELD: Only trigger the next email if THIS exact click succeeds in updating the database!
           const { data } = await supabase.from('availability')
-            .update({ 
-              current_approach_index: nextIndex, 
-              approach_initiated_at: new Date().toISOString() 
-            })
-            .eq('player_id', anchor_player_id)
-            .eq('concert_id', concert_id)
-            .eq('current_approach_index', currentIndex)
+            .update({ current_approach_index: nextIndex, approach_initiated_at: new Date().toISOString() })
+            .eq('player_id', anchor_player_id).eq('concert_id', concert_id).eq('current_approach_index', currentIndex)
             .select();
 
-          // 🌟 Only trigger the next email if THIS exact click successfully updated the database
           if (data && data.length > 0 && list[nextIndex]) {
              await supabase.functions.invoke('send-concert-emails', {
-               body: {
-                 concert_id,
-                 player_ids: [list[nextIndex].id],
-                 message: currentAvail.custom_message
-               }
+               body: { concert_id, player_ids: [list[nextIndex].id], message: targetedAvail.custom_message }
              });
           }
         }
       }
-      return Response.redirect(`${FRONTEND_URL}/respond?status=declined`, 302);
+      return new Response(JSON.stringify({ status: 'declined' }), { headers: corsHeaders });
     }
 
-    return Response.redirect(`${FRONTEND_URL}/respond?status=unknown`, 302);
+    return new Response(JSON.stringify({ status: 'unknown' }), { headers: corsHeaders });
   } catch (err: any) {
-    return Response.redirect(`${FRONTEND_URL}/respond?status=error`, 302);
+    return new Response(JSON.stringify({ status: 'error', error: err.message }), { headers: corsHeaders });
   }
 });
