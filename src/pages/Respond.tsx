@@ -65,8 +65,9 @@ export default function Respond() {
       setDirectStatus(data.status);
       setState('done');
     } catch (err) {
-      setState('error');
-      setErrorMsg('Failed to process your response. Please contact the manager.');
+      // 🌟 Safely catches expired/broken links without crashing
+      setDirectStatus('error');
+      setState('done');
     }
   }
 
@@ -157,8 +158,9 @@ export default function Respond() {
               <XCircle size={40} />
               <p>{errorMsg}</p>
             </div>
-<div className="respond-done">
-              {/* 🌟 EXACT CUSTOM MESSAGES RENDERED DIRECTLY ON SCREEN */}
+          ) : state === 'done' ? (
+            <div className="respond-done">
+              {/* 🌟 EXACT CUSTOM MESSAGES RENDERED DIRECTLY ON SCREEN WITH PERFECT SYNTAX */}
               {directStatus === 'contact-manager' ? (
                 <>
                   <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
