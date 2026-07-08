@@ -41,6 +41,7 @@ type AvailabilityCell = Availability & {
   player: Player; concert: MatrixConcert;
   approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
   current_approach_index?: number; approach_initiated_at?: string | null;
+  type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
   target_instrument?: string | null;
   custom_message?: string | null;
 };
