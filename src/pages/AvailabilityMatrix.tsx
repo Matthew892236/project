@@ -93,9 +93,16 @@ function PortalDropdown({ anchorRect, onClose, children }: { anchorRect: DOMRect
     const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
     return () => { clearTimeout(id); document.removeEventListener('mousedown', handleClick); };
   }, [onClose]);
+  
+  // 🌟 FIX: Automatically detects if it's too close to the bottom and pops UP instead!
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const showAbove = spaceBelow < 380; 
+  const topPos = showAbove ? anchorRect.top + window.scrollY - 4 : anchorRect.bottom + window.scrollY + 4;
+  const transform = showAbove ? 'translateY(-100%)' : 'none';
   const left = (window.innerWidth - anchorRect.left) < 360 ? anchorRect.right - 360 : anchorRect.left;
+  
   return createPortal(
-    <div ref={dropdownRef} style={{ position: 'absolute', top: anchorRect.bottom + window.scrollY + 4, left, width: 360, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui', display: 'flex', flexDirection: 'column' }}>
+    <div ref={dropdownRef} style={{ position: 'absolute', top: topPos, left, transform, width: 360, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui', display: 'flex', flexDirection: 'column' }}>
       {children}
     </div>, document.body
   );

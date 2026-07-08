@@ -69,26 +69,15 @@ Deno.serve(async (req) => {
     }
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    const BASE_URL = `https://xkwsshbjpevdpvkruqbv.supabase.co/functions/v1/dep-response`;
 
     for (const player of players) {
       if (!player.email) continue;
       const matrixLink = `https://brassbandwidth.netlify.app/band-view?uid=${player.band_id || bandId}`;
 
-      // 🌟 THIS IS THE FIX: Properly identify if they are a Dep or Core Player
-      const isSpareRecipient = 
-        player.status === 'Spare' || 
-        player.is_global_spare === true || 
-        (concertDetails && player.band_id !== concertDetails.band_id) || 
-        (!player.band_id);
+      const isSpareRecipient = player.status === 'Spare' || player.is_global_spare === true || (concertDetails && player.band_id !== concertDetails.band_id) || (!player.band_id);
 
-      const emailHeaderTitle = isSpareRecipient 
-        ? `Dep Request: ${concertNameDisplay}` 
-        : `Availability Request: ${concertNameDisplay}`;
-
-      const emailIntroText = isSpareRecipient
-        ? `<strong>${bandName}</strong> is looking for a dep on <strong>${player.instrument || 'your instrument'}</strong> for their upcoming concert.`
-        : `Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.`;
+      const emailHeaderTitle = isSpareRecipient ? `Dep Request: ${concertNameDisplay}` : `Availability Request: ${concertNameDisplay}`;
+      const emailIntroText = isSpareRecipient ? `<strong>${bandName}</strong> is looking for a dep on <strong>${player.instrument || 'your instrument'}</strong> for their upcoming concert.` : `Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.`;
 
       let htmlBody = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc;">
@@ -99,12 +88,11 @@ Deno.serve(async (req) => {
       `;
 
       if (showButtons) {
-        // 🌟 THIS IS THE FIX: Send 'core-accept' for regular band members so they turn GREEN!
         const acceptAction = isSpareRecipient ? 'dep-accept' : 'core-accept';
         const declineAction = isSpareRecipient ? 'dep-decline' : 'core-decline';
         
-        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=${acceptAction}&t=${Date.now()}`;
-        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=${declineAction}&t=${Date.now()}`;
+        const acceptLink = `https://brassbandwidth.netlify.app/respond?pid=${player.id}&cid=${concertDetails.id}&act=${acceptAction}&t=${Date.now()}`;
+        const declineLink = `https://brassbandwidth.netlify.app/respond?pid=${player.id}&cid=${concertDetails.id}&act=${declineAction}&t=${Date.now()}`;
         
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
@@ -122,16 +110,17 @@ Deno.serve(async (req) => {
       
       htmlBody += `
           <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #475569;">
-            <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>
       `;
 
+      // 🌟 FIX: We moved the matrix and network links securely inside the Core Player check!
       if (!isSpareRecipient) {
+        htmlBody += `<p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>`;
         const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
 
       htmlBody += `
-            <div style="margin-top: 24px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+            <div style="margin-top: ${isSpareRecipient ? '0' : '24px'}; border-top: ${isSpareRecipient ? 'none' : '1px dashed #cbd5e1'}; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
               <p style="margin: 0 0 6px 0;"><strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network spare or listed on a local band roster for BrassBandwidth.</p>
               <p style="margin: 0;">Your contact data is processed strictly for coordinating performance bookings.</p>
             </div>

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Edit, Trash2, Calendar, MapPin, Clock, X, Eye, EyeOff, Mail, Bell, ChevronDown, Send, ChevronLeft, ChevronRight, List, CalendarDays } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Concert, Player, Availability, AvailabilityStatus } from '../lib/supabase';
@@ -6,15 +7,35 @@ import type { Concert, Player, Availability, AvailabilityStatus } from '../lib/s
 type ConcertActions = 'email-confirmed' | 'chase';
 type ViewMode = 'list' | 'calendar';
 
+// 🌟 FIX: Smart Portal Action Menu to prevent cut-offs!
+function ActionPortal({ anchorRect, onClose, children }: { anchorRect: DOMRect; onClose: () => void; children: React.ReactNode; }) {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClick(e: MouseEvent) { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) onClose(); }
+    const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
+    return () => { clearTimeout(id); document.removeEventListener('mousedown', handleClick); };
+  }, [onClose]);
+  
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const showAbove = spaceBelow < 120;
+  const topPos = showAbove ? anchorRect.top + window.scrollY - 4 : anchorRect.bottom + window.scrollY + 4;
+  const transform = showAbove ? 'translateY(-100%)' : 'none';
+  const left = anchorRect.right - 220; 
+  
+  return createPortal(
+    <div ref={dropdownRef} style={{ position: 'absolute', top: topPos, left, transform, width: 220, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px' }}>
+      {children}
+    </div>, document.body
+  );
+}
+
 export default function ConcertDirectory() {
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('list'); 
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
-  
   const [bandId, setBandId] = useState<string | null>(null);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConcert, setEditingConcert] = useState<Concert | null>(null);
   
@@ -25,6 +46,8 @@ export default function ConcertDirectory() {
 
   const [actionModal, setActionModal] = useState<{ concert: Concert; type: ConcertActions } | null>(null);
   const [activeActions, setActiveActions] = useState<string | null>(null);
+  const [actionAnchor, setActionAnchor] = useState<DOMRect | null>(null);
+
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [publishCompose, setPublishCompose] = useState<Concert | null>(null);
@@ -37,9 +60,7 @@ export default function ConcertDirectory() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data: bandData } = await supabase.from('bands').select('id').eq('manager_id', user.id).maybeSingle();
-
       if (bandData) {
         setBandId(bandData.id);
         const [concertsRes, playersRes, availabilityRes] = await Promise.all([
@@ -47,14 +68,11 @@ export default function ConcertDirectory() {
           supabase.from('players').select('id, name, email, instrument, status').eq('band_id', bandData.id),
           supabase.from('availability').select('player_id, concert_id, status, spare_player_id'),
         ]);
-
         if (concertsRes.data) setConcerts(concertsRes.data as Concert[]);
         if (playersRes.data) setPlayers(playersRes.data as Player[]);
         if (availabilityRes.data) setAvailability(availabilityRes.data as Availability[]);
       }
-    } catch (err: any) {
-      showToast(`Error syncing data: ${err.message}`);
-    }
+    } catch (err: any) { showToast(`Error syncing data: ${err.message}`); }
   }
 
   function getStatus(playerId: string, concertId: string): AvailabilityStatus {
@@ -95,18 +113,14 @@ export default function ConcertDirectory() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!bandId) { showToast('❌ Missing Band Profile ID correlation.'); return; }
-
     const rawPostcode = formData.postcode.trim();
-
     if (rawPostcode && !isValidUKPostcode(rawPostcode)) {
       showToast('❌ Invalid UK Postcode format. Please check and try again.');
       return;
     }
-
     const cleanPostcode = rawPostcode.replace(/\s+/g, '').toUpperCase();
     let latValue: number | null = null;
     let lngValue: number | null = null;
-
     if (cleanPostcode) {
       try {
         const geoResponse = await fetch(`https://api.postcodes.io/postcodes/${cleanPostcode}`);
@@ -114,13 +128,9 @@ export default function ConcertDirectory() {
           const geoData = await geoResponse.json();
           latValue = geoData.result.latitude ? parseFloat(geoData.result.latitude) : null;
           lngValue = geoData.result.longitude ? parseFloat(geoData.result.longitude) : null;
-        } else {
-          showToast('❌ Postcode not recognized by GPS registry.');
-          return;
-        }
+        } else { showToast('❌ Postcode not recognized by GPS registry.'); return; }
       } catch (err) { console.error("Postcode validation skipped:", err); }
     }
-
     const formattedPostcodeDisplay = rawPostcode.toUpperCase();
     const fullLocation = formattedPostcodeDisplay ? `${formData.venue_name}, ${formattedPostcodeDisplay}` : formData.venue_name;
     const submissionPayload = { name: formData.name, concert_date: formData.concert_date, start_time: formData.start_time, end_time: formData.end_time, location: fullLocation, latitude: latValue, longitude: lngValue, band_id: bandId };
@@ -159,7 +169,6 @@ export default function ConcertDirectory() {
     }
   }
 
-  // 🌟 NEW FUNCTION: Publish Quietly Without Sending
   async function publishWithoutEmail(e: React.MouseEvent) {
     e.preventDefault();
     if (!publishCompose) return;
@@ -188,17 +197,13 @@ export default function ConcertDirectory() {
       const s = getStatus(p.id, concert.id); 
       return s === 'Available' || s === 'Spare Assigned'; 
     });
-
     if (confirmed.length === 0) {
       showToast(`No confirmed players available for ${concert.name} yet.`);
-      setActionModal(null);
-      return;
+      setActionModal(null); return;
     }
-
     const { error } = await supabase.functions.invoke('send-concert-emails', { 
       body: { concert_id: concert.id, player_ids: confirmed.map((p) => p.id), subject: emailSubject, message: emailMessage } 
     });
-    
     showToast(error ? `Error sending lineup email (${error.message})` : `Confirmed lineup sent for ${concert.name} (${confirmed.length} players)`);
     setActionModal(null);
   }
@@ -243,8 +248,6 @@ export default function ConcertDirectory() {
     const confirmed = activePlayers.filter((p) => { const s = getStatus(p.id, concert.id); return s === 'Available' || s === 'Spare Assigned'; }).length;
     const notResponded = activePlayers.filter((p) => getStatus(p.id, concert.id) === 'Not Responded').length;
     const notAvailable = activePlayers.filter((p) => getStatus(p.id, concert.id) === 'Not Available').length;
-    const isActionsOpen = activeActions === concert.id;
-
     const gcalStartDate = concert.concert_date.replace(/-/g, '');
     const gcalStartTime = concert.start_time.slice(0, 5).replace(':', '') + '00';
     const gcalEndTime = concert.end_time.slice(0, 5).replace(':', '') + '00';
@@ -281,31 +284,28 @@ export default function ConcertDirectory() {
               {concert.status === 'pending' ? <><Eye size={14} /> Publish</> : <><EyeOff size={14} /> Unpublish</>}
             </button>
             {isLive && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setActiveActions(isActionsOpen ? null : concert.id)} style={{ padding: '6px 10px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: '#f1f5f9', color: '#475569' }}>
+              <>
+                <button 
+                  onClick={(e) => {
+                    if (activeActions === concert.id) {
+                      setActiveActions(null); setActionAnchor(null);
+                    } else {
+                      setActiveActions(concert.id); setActionAnchor(e.currentTarget.getBoundingClientRect());
+                    }
+                  }} 
+                  style={{ padding: '6px 10px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', border: 'none', backgroundColor: '#f1f5f9', color: '#475569' }}
+                >
                   Email <ChevronDown size={14} />
                 </button>
-                {isActionsOpen && (
-                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '4px', zIndex: 10, minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {activeActions === concert.id && actionAnchor && (
+                  <ActionPortal anchorRect={actionAnchor} onClose={() => setActiveActions(null)}>
                     <div onClick={() => { setActiveActions(null); setEmailSubject(`Confirmed lineup: ${concert.name}`); setEmailMessage(''); setActionModal({ concert, type: 'email-confirmed' }); }} style={{ padding: '8px 12px', fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', borderRadius: '4px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Mail size={14} /> Email Confirmed Lineup</div>
                     <div onClick={() => { setActiveActions(null); setEmailSubject(`Reminder: please respond for ${concert.name}`); setEmailMessage(''); setActionModal({ concert, type: 'chase' }); }} style={{ padding: '8px 12px', fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', borderRadius: '4px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Bell size={14} /> Chase Non-Responders ({notResponded})</div>
-                  </div>
+                  </ActionPortal>
                 )}
-              </div>
+              </>
             )}
-            
-            <a 
-              href={gcalUrl}
-              target="_blank"
-              rel="noreferrer"
-              title="Add to Google Calendar" 
-              style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer', borderRadius: '6px' }} 
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ecfdf5'} 
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <Calendar size={16} />
-            </a>
-
+            <a href={gcalUrl} target="_blank" rel="noreferrer" title="Add to Google Calendar" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#10b981', cursor: 'pointer', borderRadius: '6px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ecfdf5'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Calendar size={16} /></a>
             <button onClick={() => openEditModal(concert)} title="Edit" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', borderRadius: '6px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Edit size={16} /></button>
             <button onClick={() => handleDelete(concert)} title="Delete" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', borderRadius: '6px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Trash2 size={16} /></button>
           </div>
@@ -420,7 +420,7 @@ export default function ConcertDirectory() {
           </div>
         </div>
       ) : (
-        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflowX: 'auto' }}>
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
@@ -554,7 +554,6 @@ export default function ConcertDirectory() {
                 <textarea value={publishMessage} onChange={(e) => setPublishMessage(e.target.value)} placeholder="Add any extra details for the band…" rows={3} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
               </div>
               
-              {/* 🌟 NEW: Added the 'Publish Only (No Email)' option to the footer */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                 <button type="button" onClick={() => setPublishCompose(null)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
                   Cancel
