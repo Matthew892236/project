@@ -37,11 +37,12 @@ export function isInstrumentMatch(playerInst: string | undefined, targInst: stri
   return false;
 }
 
-type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
 type AvailabilityCell = Availability & { 
   player: Player; concert: MatrixConcert;
   approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
   current_approach_index?: number; approach_initiated_at?: string | null;
+  target_instrument?: string | null;
+  custom_message?: string | null;
 };
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -402,14 +403,14 @@ export default function AvailabilityMatrix() {
         const playerObj = players.find((x) => x.id === p.player_id) || globalSpares.find((x) => x.id === p.player_id);
         const concertObj = concerts.find((x) => x.id === p.concert_id);
 
-        if (playerObj && concertObj) {
+if (playerObj && concertObj) {
           const enrichedCell = {
             id: `${p.player_id}-${p.concert_id}`,
             ...p,
             player: playerObj,
             concert: concertObj,
             approached_spares: p.approached_spares || []
-          } as AvailabilityCell;
+          } as unknown as AvailabilityCell;
 
           if (existingIdx !== -1) {
             newState[existingIdx] = enrichedCell;
