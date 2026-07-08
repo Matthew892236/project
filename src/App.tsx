@@ -20,7 +20,8 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network' || currentStatus === 'welcome') {
+    // 🌟 FIX: Added 'contact-manager' to the whitelist
+    if (['accepted', 'declined', 'available', 'joined-network', 'welcome', 'contact-manager'].includes(currentStatus || '')) {
       setStatus(currentStatus);
     }
   }, []);
@@ -28,60 +29,43 @@ function ResponseNotification() {
   if (!status) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 9999
-    }}>
-      <div style={{
-        background: 'white',
-        padding: '32px',
-        borderRadius: '16px',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-        textAlign: 'center',
-        maxWidth: '400px',
-        width: '90%',
-        position: 'relative',
-        border: '1px solid #e2e8f0',
-        fontFamily: 'system-ui, sans-serif'
-      }}>
-        <button 
-          onClick={() => setStatus(null)}
-          style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '20px' }}
-        >
-          ✕
-        </button>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+      <div style={{ background: 'white', padding: '32px', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', textAlign: 'center', maxWidth: '400px', width: '90%', position: 'relative', border: '1px solid #e2e8f0', fontFamily: 'system-ui, sans-serif' }}>
+        <button onClick={() => setStatus(null)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '20px' }}>✕</button>
 
         {status === 'joined-network' || status === 'welcome' ? (
           <>
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>🌍</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Welcome to the Network!</h2>
-            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              Thank you for adding your name to help the band community! You are officially on the Dep Network. If you would like your name removed, please contact admin@brassbandwidth.com.
-            </p>
+            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>Thank you for adding your name to help the band community! You are officially on the Dep Network. If you would like your name removed, please contact admin@brassbandwidth.com.</p>
+          </>
+        ) : status === 'contact-manager' ? (
+          <>
+            <div style={{ fontSize: '56px', marginBottom: '16px' }}>⚠️</div>
+            <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Seat Already Filled</h2>
+            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>This gig has already been accepted by another player! If you need to back out, you must contact the Band Manager directly.</p>
           </>
         ) : status === 'accepted' || status === 'available' ? (
           <>
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>✅</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Gig Confirmed!</h2>
-            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              Fantastic! Your availability status has been updated to Green. The Band Manager's matrix has been updated. Thank you!
-            </p>
+            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>Fantastic! Your availability status has been updated to Green. The Band Manager's matrix has been updated. Thank you!</p>
           </>
         ) : (
           <>
             <div style={{ fontSize: '56px', marginBottom: '16px' }}>❌</div>
             <h2 style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 8px 0' }}>Response Recorded</h2>
-            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>
-              No worries at all! Your response has been logged so the manager can automatically check the next player on the list. Thanks for letting us know quickly!
-            </p>
+            <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.5', margin: 0 }}>No worries at all! Your response has been logged so the manager can automatically check the next player on the list. Thanks for letting us know quickly!</p>
           </>
         )}
+
+        <button onClick={() => setStatus(null)} style={{ marginTop: '24px', backgroundColor: '#0f172a', color: 'white', fontWeight: '600', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', width: '100%', fontSize: '15px' }}>
+          Got it, thanks!
+        </button>
+      </div>
+    </div>
+  );
+}
 
         <button 
           onClick={() => setStatus(null)}

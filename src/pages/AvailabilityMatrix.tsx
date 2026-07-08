@@ -123,7 +123,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const cellId = `${player.id}-${concert.id}`;
         const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        
         const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
-        const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares].find((p: any) => p.id === avail.spare_player_id) : undefined;
+        const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares, ...(avail.approached_spares || [])].find((p: any) => p.id === avail.spare_player_id) : undefined;
         const totalSparesCount = localSparesList.length + globalSparesList.length;
 
         return (
@@ -564,7 +564,7 @@ const fillingSpare = availability.find(a =>
 
                         if (fillingSpare) {
                            const configColors = getCellStyle(fillingSpare.status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
-                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;                          
+                           const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
                                <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>

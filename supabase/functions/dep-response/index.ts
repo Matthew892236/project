@@ -71,13 +71,19 @@ if (action === 'dep-decline' || action === 'decline') {
         if (list[currentIndex] && list[currentIndex].id === player_id) {
           const nextIndex = currentIndex + 1;
           
-          await supabase.from('availability').update({ 
-            current_approach_index: nextIndex, 
-            approach_initiated_at: new Date().toISOString() 
-          }).match({ player_id: anchor_player_id, concert_id });
+          // 🌟 OPTIMISTIC LOCK: Only update if the index hasn't been changed by a scanner yet!
+          const { data } = await supabase.from('availability')
+            .update({ 
+              current_approach_index: nextIndex, 
+              approach_initiated_at: new Date().toISOString() 
+            })
+            .eq('player_id', anchor_player_id)
+            .eq('concert_id', concert_id)
+            .eq('current_approach_index', currentIndex)
+            .select();
 
-          // 🌟 THE BATON PASS: If there is another spare in the list, command the email function directly!
-          if (list[nextIndex]) {
+          // 🌟 Only trigger the next email if THIS exact click successfully updated the database
+          if (data && data.length > 0 && list[nextIndex]) {
              await supabase.functions.invoke('send-concert-emails', {
                body: {
                  concert_id,

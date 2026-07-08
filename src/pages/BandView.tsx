@@ -91,8 +91,8 @@ export default function BandView() {
       const [concertsRes, playersRes, availabilityRes] = await Promise.all([
         supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
         supabase.from('players').select('*').eq('band_id', bandData.id).order('sort_order'),
-        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index')
-      ]);
+// 🌟 FIX: Added target_instrument to the select string!
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index, target_instrument')      ]);
 
       setConcerts((concertsRes.data as MatrixConcert[]) || []);
       setPlayers(playersRes.data || []);
