@@ -20,7 +20,7 @@ function ResponseNotification() {
     const params = new URLSearchParams(window.location.search);
     const currentStatus = params.get('status');
     
-    // 🌟 FIX: Added 'contact-manager' to the whitelist
+    // 🌟 FIX: Added 'contact-manager' to the whitelist and removed the URL stripper
     if (['accepted', 'declined', 'available', 'joined-network', 'welcome', 'contact-manager'].includes(currentStatus || '')) {
       setStatus(currentStatus);
     }
@@ -67,32 +67,9 @@ function ResponseNotification() {
   );
 }
 
-        <button 
-          onClick={() => setStatus(null)}
-          style={{
-            marginTop: '24px',
-            backgroundColor: '#0f172a',
-            color: 'white',
-            fontWeight: '600',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: 'pointer',
-            width: '100%',
-            fontSize: '15px'
-          }}
-        >
-          Got it, thanks!
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasBand, setHasBand] = useState<boolean | null>(null);
-  
   const [authEvent, setAuthEvent] = useState<string | null>(null); 
 
   useEffect(() => {
@@ -129,8 +106,6 @@ export default function App() {
   const cleanPath = window.location.pathname.replace(/\/$/, '');
 
   // 🌟 Clean Public Entry points
-// 🌟 Clean Public Entry points
-// 🌟 Clean Public Entry points
   if (cleanPath === '/respond') {
     const isStatusRedirect = window.location.search.includes('status=');
     return (
