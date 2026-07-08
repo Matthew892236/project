@@ -1,26 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Music, CheckCircle, XCircle, Loader } from 'lucide-react';
+TypeScript
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { CheckCircle2, XCircle, AlertCircle, Calendar, MapPin, Clock, Music, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { AvailabilityStatus } from '../lib/supabase';
+import type { Concert, AvailabilityStatus } from '../lib/supabase';
 
-type State = 'loading' | 'ready' | 'submitting' | 'done' | 'error';
-type Mode = 'concert' | 'registry'; // ◄ Added to track what type of token we have
+type State = 'loading' | 'success' | 'error';
+type Mode = 'concert' | 'registry-opt-in';
 
-type TokenData = {
-  player_id: string;
-  concert_id: string;
-  used_at: string | null;
-  player: { name: string; instrument: string };
-  concert: { name: string; concert_date: string; start_time: string; end_time: string; location: string };
-};
+interface TokenData {
+  player: { id: string; name: string; instrument: string; band_id?: string | null };
+  concert: Concert & { band_name?: string };
+  action: 'accept' | 'decline' | 'dep-accept' | 'dep-decline' | 'core-accept' | 'core-decline';
+  isSpare: boolean;
+}
 
-// ◄ Added type for the player registry setup
-type RegistryData = {
-  id: string;
-  name: string;
-  instrument: string;
-  bands: { name: string } | null;
-};
+interface RegistryData {
+  player: { id: string; name: string; instrument: string };
+}
 
 export default function Respond() {
   const params = new URLSearchParams(window.location.search);
@@ -28,9 +25,9 @@ export default function Respond() {
   const quickResponse = params.get('status');
 
   const [state, setState] = useState<State>('loading');
-  const [mode, setMode] = useState<Mode | null>(null); // ◄ Tracks if this is a concert or a registry opt-in
+  const [mode, setMode] = useState<Mode | null>(null);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
-  const [registryData, setRegistryData] = useState<RegistryData | null>(null); // ◄ Registry profile state
+  const [registryData, setRegistryData] = useState<RegistryData | null>(null);
   const [submitted, setSubmitted] = useState<AvailabilityStatus | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -39,7 +36,11 @@ export default function Respond() {
     // This prevents the "No response token provided" error from ever triggering!
     if (quickResponse) return;
 
-    if (!token) { setState('error'); setErrorMsg('No response token provided.'); return; }
+    if (!token) { 
+      setState('error'); 
+      setErrorMsg('No response token provided.'); 
+      return; 
+    }
     determineTokenRoute();
   }, [token, quickResponse]);
 
