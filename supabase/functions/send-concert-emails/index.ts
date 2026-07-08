@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
       if (!player.email) continue;
       const matrixLink = `https://brassbandwidth.netlify.app/band-view?uid=${player.band_id || bandId}`;
 
+      // 🌟 THIS IS THE FIX: Properly identify if they are a Dep or Core Player
       const isSpareRecipient = 
         player.status === 'Spare' || 
         player.is_global_spare === true || 
@@ -98,8 +99,13 @@ Deno.serve(async (req) => {
       `;
 
       if (showButtons) {
-        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-accept&t=${Date.now()}`;
-        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=dep-decline&t=${Date.now()}`;
+        // 🌟 THIS IS THE FIX: Send 'core-accept' for regular band members so they turn GREEN!
+        const acceptAction = isSpareRecipient ? 'dep-accept' : 'core-accept';
+        const declineAction = isSpareRecipient ? 'dep-decline' : 'core-decline';
+        
+        const acceptLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=${acceptAction}&t=${Date.now()}`;
+        const declineLink = `${BASE_URL}?player_id=${player.id}&concert_id=${concertDetails.id}&action=${declineAction}&t=${Date.now()}`;
+        
         htmlBody += `
           <div style="background-color: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #3b82f6; margin: 20px 0;">
             <p style="margin: 0 0 8px 0; color: #1e293b;"><strong>🎵 Host Band:</strong> ${bandName}</p>
@@ -119,12 +125,7 @@ Deno.serve(async (req) => {
             <p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>
       `;
 
-      const isAlreadyGlobal = 
-        player.is_global_spare === true || 
-        (concertDetails && player.band_id !== concertDetails.band_id) || 
-        (!player.band_id);
-
-      if (!isAlreadyGlobal) {
+      if (!isSpareRecipient) {
         const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
         htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
@@ -132,24 +133,15 @@ Deno.serve(async (req) => {
       htmlBody += `
             <div style="margin-top: 24px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
               <p style="margin: 0 0 6px 0;"><strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network spare or listed on a local band roster for BrassBandwidth.</p>
-              <p style="margin: 0;">Your contact data is processed strictly for coordinating performance bookings. To request data removal, update your active roster status, or exercise your right to erasure, please contact the platform administrator at <a href="mailto:admin@brassbandwidth.com" style="color: #64748b; text-decoration: underline;">admin@brassbandwidth.com</a>.</p>
+              <p style="margin: 0;">Your contact data is processed strictly for coordinating performance bookings.</p>
             </div>
           </div>
         </div>
       `;
 
-      let finalSubject = subject;
-      if (!finalSubject || finalSubject === "" || finalSubject.toLowerCase().includes("availability")) {
-        finalSubject = isSpareRecipient 
-          ? `Dep Request: ${concertNameDisplay} (${player.instrument || 'Musician'})` 
-          : `Availability Request: ${concertNameDisplay}`;
-      } else if (!finalSubject.includes(concertNameDisplay)) {
-        finalSubject = `${finalSubject} - ${concertNameDisplay}`;
-      }
-
       await fetch("https://api.resend.com/emails", {
         method: "POST", headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `"${bandName}" <Admin@brassbandwidth.com>`, reply_to: replyToEmail, to: player.email, subject: finalSubject, html: htmlBody }),
+        body: JSON.stringify({ from: `"${bandName}" <Admin@brassbandwidth.com>`, reply_to: replyToEmail, to: player.email, subject, html: htmlBody }),
       });
     }
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

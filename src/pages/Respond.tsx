@@ -35,9 +35,16 @@ export default function Respond() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    // 🌟 THE FIX: If the URL has a status, quietly stop right here. 
+    // This prevents the "No response token provided" error from ever triggering!
+    if (quickResponse) return;
+
     if (!token) { setState('error'); setErrorMsg('No response token provided.'); return; }
     determineTokenRoute();
-  }, [token]);
+  }, [token, quickResponse]);
+
+  // 🌟 THE FIX: If a status popup is active, render absolutely nothing in the background.
+  if (quickResponse) return null;
 
   // 🕵️‍♂️ Step 1: Detect what type of invitation link was clicked
   async function determineTokenRoute() {

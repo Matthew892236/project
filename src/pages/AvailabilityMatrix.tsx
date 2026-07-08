@@ -552,11 +552,12 @@ if (playerObj && concertObj) {
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
                         // 🌟 FIX: Utilize the new flexible isInstrumentMatch to find the exact contacted spare even if strings differ slightly!
+// 🌟 STRICT FIX: No more fallback! The target_instrument MUST match exactly.
                         const fillingSpare = availability.find(a => 
                           a.concert_id === c.id && 
                           (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && 
-                          a.player?.status === 'Spare' && 
-                          isInstrumentMatch(a.player?.instrument, instrument) && 
+                          !activePlayers.some(p => p.id === a.player_id) && 
+                          a.target_instrument === instrument && // <-- STRICT MATCH ONLY
                           !busySpareIds.has(a.player_id)
                         );
                         
