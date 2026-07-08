@@ -15,7 +15,6 @@ const STANDARD_INSTRUMENTS = [
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
-// 🌟 FIX: Global Instrument Matcher ensures "Cornet" locks into "Principal Cornet" vacant rows without disappearing!
 const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
 const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
 const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
@@ -37,15 +36,23 @@ export function isInstrumentMatch(playerInst: string | undefined, targInst: stri
   return false;
 }
 
+type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
+
 type AvailabilityCell = Availability & { 
   player: Player; concert: MatrixConcert;
   approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
   current_approach_index?: number; approach_initiated_at?: string | null;
-  type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
   target_instrument?: string | null;
   custom_message?: string | null;
 };
 
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8; 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8; 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
