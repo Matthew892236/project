@@ -157,8 +157,7 @@ export default function Respond() {
               <XCircle size={40} />
               <p>{errorMsg}</p>
             </div>
-          ) : state === 'done' ? (
-            <div className="respond-done">
+<div className="respond-done">
               {/* 🌟 EXACT CUSTOM MESSAGES RENDERED DIRECTLY ON SCREEN */}
               {directStatus === 'contact-manager' ? (
                 <>
@@ -179,6 +178,12 @@ export default function Respond() {
                   <h2>Response Recorded</h2>
                   <p>Your response has been logged so the manager can automatically check the next player on the list. Thanks for letting us know quickly!</p>
                 </>
+              ) : directStatus === 'error' || directStatus === 'unknown' ? (
+                <>
+                  <XCircle size={48} className="done-icon done-not-available" style={{ color: '#ef4444' }} />
+                  <h2>Oops! Something went wrong</h2>
+                  <p>We couldn't securely verify your status link. Please contact the band manager directly to update your status.</p>
+                </>
               ) : mode === 'registry' ? (
                 <>
                   <CheckCircle size={48} className="done-icon done-available" />
@@ -191,13 +196,13 @@ export default function Respond() {
                   <h2>Great, you're in!</h2>
                   <p>You've been marked as <strong>Available</strong> for {tokenData?.concert.name}.</p>
                 </>
-              ) : (
+              ) : submitted === 'Not Available' ? (
                 <>
                   <XCircle size={48} className="done-icon done-not-available" />
                   <h2>Thanks for letting us know</h2>
                   <p>You've been marked as <strong>Not Available</strong> for {tokenData?.concert.name}.</p>
                 </>
-              )}
+              ) : null}
             </div>
           ) : mode === 'registry' && registryData ? (
             <>
