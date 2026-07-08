@@ -123,7 +123,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
         const cellId = `${player.id}-${concert.id}`;
         const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        
         const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
-        const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares, ...(avail.approached_spares || [])].find((p: any) => p.id === avail.spare_player_id) : undefined;
+        const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares, ...(avail?.approached_spares || [])].find((p: any) => p.id === avail.spare_player_id) : undefined;
         const totalSparesCount = localSparesList.length + globalSparesList.length;
 
         return (
