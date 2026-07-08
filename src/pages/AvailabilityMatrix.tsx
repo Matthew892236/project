@@ -552,7 +552,6 @@ export default function AvailabilityMatrix() {
                       {concerts.map(c => {
                         const cellId = `vacant-${instrument}-${c.id}`;
                         const { localS, globalS } = getAvailableSpares(instrument, c);
-                        const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
 const fillingSpare = availability.find(a => 
   a.concert_id === c.id && 
