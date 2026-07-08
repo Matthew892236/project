@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Calendar, MapPin, Clock, Music, Loader } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { CheckCircle, XCircle, Music, Loader } from 'lucide-react';import { supabase } from '../lib/supabase';
 import type { Concert, AvailabilityStatus } from '../lib/supabase';
 
 type State = 'loading' | 'ready' | 'submitting' | 'done' | 'error' | 'success';
