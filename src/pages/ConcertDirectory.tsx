@@ -245,9 +245,15 @@ export default function ConcertDirectory() {
 
   function ConcertRow({ concert, label }: { concert: Concert; label?: string }) {
     const isLive = concert.status === 'live';
-    const confirmed = activePlayers.filter((p) => { const s = getStatus(p.id, concert.id); return s === 'Available' || s === 'Spare Assigned'; }).length;
+    
+    // 🌟 FIX: Split the availability counts to isolate Core vs Deps!
+    const concertAvail = availability.filter(a => a.concert_id === concert.id);
+    const coreConfirmed = concertAvail.filter(a => a.status === 'Available').length;
+    const depsAssigned = concertAvail.filter(a => a.status === 'Spare Assigned').length;
+    
     const notResponded = activePlayers.filter((p) => getStatus(p.id, concert.id) === 'Not Responded').length;
     const notAvailable = activePlayers.filter((p) => getStatus(p.id, concert.id) === 'Not Available').length;
+    
     const gcalStartDate = concert.concert_date.replace(/-/g, '');
     const gcalStartTime = concert.start_time.slice(0, 5).replace(':', '') + '00';
     const gcalEndTime = concert.end_time.slice(0, 5).replace(':', '') + '00';
@@ -269,7 +275,11 @@ export default function ConcertDirectory() {
         <td style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
           {isLive ? (
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: '#dcfce7', color: '#166534', fontWeight: 600 }}>{confirmed} ✓</span>
+              <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: '#dcfce7', color: '#166534', fontWeight: 600 }} title="Core Players Confirmed">{coreConfirmed} ✓</span>
+              
+              {/* 🌟 FIX: The new Blue Dep Pill */}
+              {depsAssigned > 0 && <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }} title="Deps Assigned">{depsAssigned} Dep</span>}
+              
               {notResponded > 0 && <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{notResponded} ?</span>}
               {notAvailable > 0 && <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: '#fef2f2', color: '#991b1b', fontWeight: 600 }}>{notAvailable} ✕</span>}
             </div>
