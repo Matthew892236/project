@@ -22,7 +22,6 @@ function ResponseNotification() {
     
     if (currentStatus === 'accepted' || currentStatus === 'declined' || currentStatus === 'available' || currentStatus === 'joined-network' || currentStatus === 'welcome') {
       setStatus(currentStatus);
-      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 

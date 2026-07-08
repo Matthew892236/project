@@ -63,16 +63,29 @@ Deno.serve(async (req) => {
       return Response.redirect(`${FRONTEND_URL}/respond?status=accepted`, 302);
     }
 
-    if (action === 'dep-decline' || action === 'decline') {
+if (action === 'dep-decline' || action === 'decline') {
       if (currentAvail) {
         const currentIndex = currentAvail.current_approach_index || 0;
         const list = currentAvail.approached_spares || [];
         
         if (list[currentIndex] && list[currentIndex].id === player_id) {
+          const nextIndex = currentIndex + 1;
+          
           await supabase.from('availability').update({ 
-            current_approach_index: currentIndex + 1, 
+            current_approach_index: nextIndex, 
             approach_initiated_at: new Date().toISOString() 
           }).match({ player_id: anchor_player_id, concert_id });
+
+          // 🌟 THE BATON PASS: If there is another spare in the list, command the email function directly!
+          if (list[nextIndex]) {
+             await supabase.functions.invoke('send-concert-emails', {
+               body: {
+                 concert_id,
+                 player_ids: [list[nextIndex].id],
+                 message: currentAvail.custom_message
+               }
+             });
+          }
         }
       }
       return Response.redirect(`${FRONTEND_URL}/respond?status=declined`, 302);

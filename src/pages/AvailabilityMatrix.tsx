@@ -275,7 +275,7 @@ export default function AvailabilityMatrix() {
         supabase.from('players').select('*').eq('band_id', currentBand.id).order('instrument').order('sort_order').order('name'),
         supabase.from('concerts').select('*').eq('band_id', currentBand.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
         supabase.from('availability').select('*'),
-        supabase.from('players').select('id, name, instrument, status, tags, band_id, latitude, longitude, bands ( name, latitude, longitude )').eq('status', 'Spare')
+        supabase.from('players').select('id, name, instrument, status, tags, band_id, latitude, longitude, bands ( name, latitude, longitude )').or('status.eq.Spare,is_global_spare.eq.true')
       ]);
 
       const loadedPlayers = (playersRes.data as Player[]) || [];
@@ -665,14 +665,14 @@ const fillingSpare = availability.find(a =>
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
 
-            <form onSubmit={async (e) => {
+<form onSubmit={async (e) => {
               e.preventDefault();
               if (cascadeCompose.dropdownIdToClose === vacantDropdown) setVacantDropdown(null);
               if (cascadeCompose.dropdownIdToClose === activeDropdown) setActiveDropdown(null);
               setCascadeCompose(null);
               setToast('Starting automated email cascade...');
               
-await onSetStatus(
+              await onSetStatus(
                 cascadeCompose.anchorId, 
                 cascadeCompose.concertId, 
                 'Spares Contacted' as any, 
@@ -681,7 +681,21 @@ await onSetStatus(
                 cascadeMessage,
                 cascadeCompose.targetInstrument || undefined 
               );
-setToast('Cascade initiated! Database automation will send the emails.');
+
+              // 🌟 THE FIX: We put the manual trigger back in for the 1st email ONLY.
+              // The Edge Function handles the rest automatically when they decline!
+              try {
+                await supabase.functions.invoke('send-concert-emails', {
+                  body: {
+                    concert_id: cascadeCompose.concertId,
+                    player_ids: [cascadeCompose.selectedSpares[0].id],
+                    message: cascadeMessage
+                  }
+                });
+                setToast('Cascade initiated & email sent to first dep!');
+              } catch (err) {
+                setToast('Database updated, but email dispatch failed.');
+              }
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Custom Email Note (Optional)</label>

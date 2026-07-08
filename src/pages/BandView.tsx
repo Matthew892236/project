@@ -47,8 +47,9 @@ function statusText(avail: any, allPlayers: Player[]) {
   if (status === 'Available') return { label: 'Available', color: '#166534' };
   if (status === 'Not Available') return { label: '✕ Not Available', color: '#991b1b' };
   
-  if (status === 'Spare Assigned') {
-    const spare = allPlayers.find(p => p.id === avail.spare_player_id);
+if (status === 'Spare Assigned') {
+    // 🌟 FIX: Check local players, but fallback to the JSON cache so global spare names don't disappear!
+    const spare = allPlayers.find(p => p.id === avail.spare_player_id) || (avail.approached_spares || []).find((s:any) => s.id === avail.spare_player_id);
     return { label: spare ? spare.name : 'Dep Assigned', color: '#1e40af' };
   }
   
