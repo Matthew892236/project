@@ -196,12 +196,12 @@ export default function BandView() {
                                 Position Vacant
                               </td>
                               {concerts.map((c) => {
-                                const vacantAvail = availability.find(a => 
-                                  a.concert_id === c.id && 
-                                  (a.status === 'Available' || a.status === 'Deps Contacted' || a.status === 'Spares Contacted' || a.status === 'Spare Assigned') &&
-                                  !activePlayers.some(p => p.id === a.player_id) && 
-                                  isInstrumentMatch(a.player?.instrument, instrument) 
-                                );
+const vacantAvail = availability.find(a => 
+  a.concert_id === c.id && 
+  (a.status === 'Available' || a.status === 'Deps Contacted' || a.status === 'Spares Contacted' || a.status === 'Spare Assigned') &&
+  !activePlayers.some(p => p.id === a.player_id) && 
+  (a.target_instrument === instrument || (!a.target_instrument && isInstrumentMatch(a.player?.instrument, instrument)))
+);
 
                                 let label = '—';
                                 let color = '#9ca3af';

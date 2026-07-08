@@ -32,14 +32,18 @@ export default function Respond() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+// 🌟 ABSOLUTE KILL SWITCH: If the URL has ?status=accepted, render absolutely NOTHING.
+  // The App.tsx popup will handle the visuals. This guarantees no error text bleeds through.
+useEffect(() => {
     if (quickResponse) return;
     if (!token) { setState('error'); setErrorMsg('No response token provided.'); return; }
     determineTokenRoute();
   }, [token, quickResponse]);
 
-  if (quickResponse) return null;
   // 🕵️‍♂️ Step 1: Detect what type of invitation link was clicked
   async function determineTokenRoute() {
+    // ... all your function code stays here ...
+
     try {
       // First, check if the token belongs to a player opting into the global registry
       const { data: playerMatch } = await supabase
@@ -126,7 +130,11 @@ export default function Respond() {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       })
     : '';
-
+// 🌟 ABSOLUTE KILL SWITCH: If the URL has ?status=..., render a blank background.
+  // This goes right ABOVE the main return statement!
+  if (quickResponse) {
+    return <div style={{ minHeight: '100vh', background: '#f8fafc' }} />;
+  }
   return (
     <div className="respond-page">
       <div className="respond-card">

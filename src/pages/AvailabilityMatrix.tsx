@@ -554,13 +554,12 @@ export default function AvailabilityMatrix() {
                         const { localS, globalS } = getAvailableSpares(instrument, c);
                         const busySpareIds = new Set(availability.filter(a => a.concert_id === c.id && a.spare_player_id).map(a => a.spare_player_id));
                         
-                        const fillingSpare = availability.find(a => 
-                          a.concert_id === c.id && 
-                          (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && 
-                          !activePlayers.some(p => p.id === a.player_id) && 
-                          (a.target_instrument === instrument || (!a.target_instrument && isInstrumentMatch(a.player?.instrument, instrument))) && 
-                          !busySpareIds.has(a.player_id)
-                        );
+const fillingSpare = availability.find(a => 
+  a.concert_id === c.id && 
+  (a.status === 'Available' || (a.status as string) === 'Spares Contacted' || (a.status as string) === 'Deps Contacted' || a.status === 'Spare Assigned') && 
+  !activePlayers.some(p => p.id === a.player_id) && 
+  (a.target_instrument === instrument || (!a.target_instrument && isInstrumentMatch(a.player?.instrument, instrument)))
+);
                         
                         const totalSparesCount = localS.length + globalS.length;
 
@@ -683,19 +682,7 @@ await onSetStatus(
                 cascadeMessage,
                 cascadeCompose.targetInstrument || undefined 
               );
-              try {
-                await supabase.functions.invoke('send-concert-emails', {
-                  body: {
-                    concert_id: cascadeCompose.concertId,
-                    // 🌟 FIX: We now ONLY send the email to the FIRST person in the cascade list! No more double emails!
-                    player_ids: [cascadeCompose.selectedSpares[0].id],
-                    message: cascadeMessage
-                  }
-                });
-                setToast('Cascade initiated & email sent to first dep!');
-              } catch (err) {
-                setToast('Database updated, but email dispatch failed.');
-              }
+setToast('Cascade initiated! Database automation will send the emails.');
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Custom Email Note (Optional)</label>
