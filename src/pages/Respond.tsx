@@ -31,9 +31,6 @@ export default function Respond() {
   const [submitted, setSubmitted] = useState<AvailabilityStatus | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  useEffect(() => {
-// 🌟 ABSOLUTE KILL SWITCH: If the URL has ?status=accepted, render absolutely NOTHING.
-  // The App.tsx popup will handle the visuals. This guarantees no error text bleeds through.
 useEffect(() => {
     if (quickResponse) return;
     if (!token) { setState('error'); setErrorMsg('No response token provided.'); return; }
