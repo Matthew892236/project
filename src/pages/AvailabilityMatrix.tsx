@@ -121,8 +121,8 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
 
   return (
     <tr ref={setNodeRef} style={{ ...rowStyle, borderBottom: '1px solid #f1f5f9' }}>
-      <td style={{ padding: '4px 8px', background: '#fff', width: '28px' }}><span {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex' }}><GripVertical size={16} /></span></td>
-      <td style={{ padding: '4px 8px', background: '#fff', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>{player.name}</td>
+      <td style={{ padding: '2px 6px', background: '#fff', width: '22px' }}><span {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex' }}><GripVertical size={16} /></span></td>
+      <td style={{ padding: '2px 6px', background: '#fff', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>{player.name}</td>
       {concerts.map((concert: any) => {
         const avail = getAvailability(player.id, concert.id);
         const status: AvailabilityStatus = avail?.status || 'Not Responded';
@@ -135,7 +135,7 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
 
         return (
           <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '170px' }}>
-            <div onClick={(e) => handleCellClick(e, cellId)} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
+            <div onClick={(e) => handleCellClick(e, cellId)} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
               <CellContent status={status} playerName={player.name} spareName={sparePlayer?.name} approachedList={avail?.approached_spares} currentIndex={activeQueueIndex} />
               <ChevronDown size={14} style={{ opacity: 0.5 }} />
             </div>
@@ -156,14 +156,14 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                   )}
                   
                   <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Set Status</div>
-                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#166534' }} onClick={() => { onSetStatus(player.id, concert.id, 'Available'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} /> Available</div>
-                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#991b1b' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Available'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} /> Not Available</div>
-                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Responded'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Not Responded</div>
+                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', color: '#166534' }} onClick={() => { onSetStatus(player.id, concert.id, 'Available'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} /> Available</div>
+                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', color: '#991b1b' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Available'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} /> Not Available</div>
+                  <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', color: '#475569' }} onClick={() => { onSetStatus(player.id, concert.id, 'Not Responded'); setActiveDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Not Responded</div>
                   
                   <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
                   
                   {totalSparesCount > 0 && (
-                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
                       <Info size={16} color="#3b82f6" style={{ flexShrink: 0, marginTop: '2px' }} />
                       <span style={{ lineHeight: '1.4' }}><strong>How to assign:</strong> Click the checkboxes to build an automated email cascade (up to 3), or click the buttons to action instantly.</span>
                     </div>
@@ -186,11 +186,11 @@ function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdow
                   )}
                   
                   <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
-                  <div style={{ padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#2563eb', fontWeight: 600 }} onClick={() => { setActiveDropdown(null); onAddPlayer(player.instrument); }}><UserPlus size={16} /> Add new local dep…</div>
+                  <div style={{ padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', color: '#2563eb', fontWeight: 600 }} onClick={() => { setActiveDropdown(null); onAddPlayer(player.instrument); }}><UserPlus size={16} /> Add new local dep…</div>
                 </div>
 
                 {totalSparesCount > 0 && (
-                  <div style={{ padding: '4px 8px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ padding: '2px 6px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: shortlistSelection.length > 0 ? '#0f172a' : '#94a3b8' }}>{shortlistSelection.length}/3 Selected for Email Cascade</span>
                     <button 
                       disabled={shortlistSelection.length === 0}
@@ -497,7 +497,7 @@ export default function AvailabilityMatrix() {
             e.stopPropagation(); 
             const anchorId = targetCorePlayerId || s.id; 
             openCascadeCompose(concertId, anchorId, [s], dropdownId, targetCorePlayerId ? undefined : targetInstrument); 
-          }} style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Email</button>
+          }} style={{ padding: '2px 6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Email</button>
           
           <button title="Directly assign to gig" onClick={(e) => { 
             e.stopPropagation(); 
@@ -505,13 +505,13 @@ export default function AvailabilityMatrix() {
             else onSetStatus(s.id, concertId, 'Spare Assigned', s.id, undefined, undefined, targetInstrument); 
             if (dropdownId === vacantDropdown) setVacantDropdown(null); 
             if (dropdownId === activeDropdown) setActiveDropdown(null); 
-          }} style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Assign</button>
+          }} style={{ padding: '2px 6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#dcfce7', color: '#166534', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Assign</button>
         </div>
       </div>
     );
   };
 
-  if (loading) return <div style={{ padding: '28px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Availability Data...</div>;
+  if (loading) return <div style={{ padding: '22px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}>Loading Availability Data...</div>;
 
   const activePlayers = players.filter(p => p.status === 'Active');
   const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
@@ -523,7 +523,7 @@ export default function AvailabilityMatrix() {
         <Grid3X3 size={36} color="#1e3a5f" />
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Availability Matrix</h1>
-          <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' }}>Track player availability for upcoming concerts. Click a cell to update status.</p>
+          <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '12.5px' }}>Track player availability for upcoming concerts. Click a cell to update status.</p>
         </div>
       </div>
       
@@ -533,11 +533,11 @@ export default function AvailabilityMatrix() {
         </div>
       ) : (
         <div className="w-full overflow-x-auto pb-4" style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', maxWidth: '100vw' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ padding: '16px 8px', position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '28px' }} />
-                <th style={{ padding: '8px 12px', fontWeight: 700, color: '#475569', position: 'sticky', left: '28px', backgroundColor: '#f8fafc', zIndex: 20, minWidth: '128px', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Core Musician</th>
+                <th style={{ padding: '16px 8px', position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '22px' }} />
+                <th style={{ padding: '8px 12px', fontWeight: 700, color: '#475569', position: 'sticky', left: '22px', backgroundColor: '#f8fafc', zIndex: 20, minWidth: '122px', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Core Musician</th>
                 {concerts.map((concert) => (
                   <th key={concert.id} style={{ padding: '8px 12px', fontWeight: 700, color: '#1e3a5f', minWidth: '180px', borderRight: '1px solid #e2e8f0' }}>
                     <span style={{ display: 'block' }}>{concert.name}</span>
@@ -552,8 +552,8 @@ export default function AvailabilityMatrix() {
                 if (section.length === 0) {
                   return (
                     <tr key={`vacant-${instrument}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '4px 8px', background: '#f8fafc' }} />
-                      <td style={{ padding: '4px 8px', background: '#f8fafc', fontWeight: 600, color: '#94a3b8', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>
+                      <td style={{ padding: '2px 6px', background: '#f8fafc' }} />
+                      <td style={{ padding: '2px 6px', background: '#f8fafc', fontWeight: 600, color: '#94a3b8', borderRight: '1px solid #e2e8f0', position: 'sticky', left: 0, zIndex: 10 }}>
                         {instrument} <span style={{ fontSize: '11px', fontWeight: 'normal', fontStyle: 'italic', display: 'block' }}>Position Vacant</span>
                       </td>
                       {concerts.map(c => {
@@ -574,13 +574,13 @@ const fillingSpare = availability.find(a =>
                            const sparePlayer = fillingSpare.spare_player_id ? [...players, ...globalSpares, ...(fillingSpare.approached_spares || [])].find((p: any) => p.id === fillingSpare.spare_player_id) : undefined;
                            return (
                              <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                               <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
+                               <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
                                  <CellContent status={fillingSpare.status} playerName={fillingSpare.player.name} spareName={sparePlayer?.name} approachedList={fillingSpare.approached_spares} currentIndex={fillingSpare.current_approach_index} /><ChevronDown size={14} style={{ opacity: 0.5 }} />
                                </div>
                                {vacantDropdown === cellId && vacantAnchor && (
                                  <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
                                    <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Set Status</div>
-                                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#475569' }} onClick={() => { onSetStatus(fillingSpare.player_id, c.id, 'Not Responded'); setVacantDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Unassign</div>
+                                   <div style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', color: '#475569' }} onClick={() => { onSetStatus(fillingSpare.player_id, c.id, 'Not Responded'); setVacantDropdown(null); }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#94a3b8' }} /> Unassign</div>
                                  </PortalDropdown>
                                )}
                              </td>
@@ -588,14 +588,14 @@ const fillingSpare = availability.find(a =>
                         }
                         return (
                           <td key={c.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9' }}>
-                            <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px 14px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600 }}>
+                            <div onClick={(e) => { if(vacantDropdown === cellId) { setVacantDropdown(null); setVacantAnchor(null); } else { setVacantShortlist([]); setVacantAnchor(e.currentTarget.getBoundingClientRect()); setVacantDropdown(cellId); } }} style={{ padding: '12px fontSize: '12.5px'', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px dashed #cbd5e1', fontWeight: 600 }}>
                               <Search size={14} style={{ marginRight: '6px' }} /> Find Dep
                             </div>
                             {vacantDropdown === cellId && vacantAnchor && (
                               <PortalDropdown anchorRect={vacantAnchor} onClose={() => setVacantDropdown(null)}>
                                 <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
                                   {totalSparesCount > 0 && (
-                                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                    <div style={{ padding: '8px 12px', backgroundColor: '#f8fafc', fontSize: '12px', color: '#475569', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
                                       <Info size={16} color="#3b82f6" style={{ flexShrink: 0, marginTop: '2px' }} />
                                       <span style={{ lineHeight: '1.4' }}><strong>How to assign:</strong> Click the checkboxes to build an automated email cascade (up to 3), or click the buttons to action instantly.</span>
                                     </div>
@@ -618,11 +618,11 @@ const fillingSpare = availability.find(a =>
                                   )}
                                   
                                   <div style={{ height: '1px', background: '#e2e8f0', margin: 0 }} />
-                                  <div style={{ padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#2563eb' }} onClick={() => { setVacantDropdown(null); setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }}><UserPlus size={16} /> + Add New Local Dep</div>
+                                  <div style={{ padding: '2px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', fontWeight: 600, color: '#2563eb' }} onClick={() => { setVacantDropdown(null); setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }}><UserPlus size={16} /> + Add New Local Dep</div>
                                 </div>
 
                                 {totalSparesCount > 0 && (
-                                  <div style={{ padding: '4px 8px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ padding: '2px 6px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '12px', fontWeight: 600, color: vacantShortlist.length > 0 ? '#0f172a' : '#94a3b8' }}>{vacantShortlist.length}/3 Selected for Email Cascade</span>
                                     <button 
                                       disabled={vacantShortlist.length === 0}
@@ -648,7 +648,7 @@ const fillingSpare = availability.find(a =>
                     <SortableContext items={section.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                       <>
                         <tr>
-                          <td colSpan={concerts.length + 2} style={{ padding: '4px 8px', backgroundColor: '#f1f5f9', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>{instrument} <span style={{ fontWeight: 500, fontSize: '13px', color: '#64748b', marginLeft: '6px' }}>({section.length})</span></td>
+                          <td colSpan={concerts.length + 2} style={{ padding: '2px 6px', backgroundColor: '#f1f5f9', fontWeight: 700, color: '#334155', borderBottom: '1px solid #e2e8f0', borderTop: '1px solid #e2e8f0' }}>{instrument} <span style={{ fontWeight: 500, fontSize: '13px', color: '#64748b', marginLeft: '6px' }}>({section.length})</span></td>
                         </tr>
                         {section.map((player) => (
                           <SortableRow key={player.id} player={player} concerts={concerts} allPlayers={players} globalSpares={globalSpares} myBandName={myBandName} activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} getAvailability={getAvailability} onSetStatus={onSetStatus} onAddPlayer={() => { setNewPlayerForm({ name: '', instrument, email: '', phone: '', status: 'Spare' }); setAddPlayerOpen(true); }} getAvailableSpares={getAvailableSpares} renderDepRow={renderDepRow} openCascadeCompose={openCascadeCompose} />
@@ -667,7 +667,7 @@ const fillingSpare = availability.find(a =>
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontWeight: 800, color: '#0f172a', fontSize: '18px' }}>Email Request to Spares</h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: '12.5px', color: '#475569', lineHeight: '1.4' }}>
               Sending gig details for <strong>{cascadeCompose.concertName}</strong> to: <br/>
               <span style={{ color: '#2563eb', fontWeight: 600 }}>{cascadeCompose.selectedSpares.map(s => s.name).join(', ')}</span>
             </p>
@@ -704,9 +704,9 @@ const fillingSpare = availability.find(a =>
                 setToast('Database updated, but email dispatch failed.');
               }
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Custom Email Note (Optional)</label>
-                <textarea rows={3} value={cascadeMessage} onChange={e => setCascadeMessage(e.target.value)} placeholder="e.g. Bring a white shirt and music stand..." style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <textarea rows={3} value={cascadeMessage} onChange={e => setCascadeMessage(e.target.value)} placeholder="e.g. Bring a white shirt and music stand..." style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px 12px' }}>
                 <button type="button" onClick={() => setCascadeCompose(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>Cancel</button>
@@ -722,9 +722,9 @@ const fillingSpare = availability.find(a =>
           <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h3 style={{ margin: '0 0 16px 0', fontWeight: 700, color: '#0f172a' }}>Add Local {newPlayerForm.instrument} Dep</h3>
             <form onSubmit={saveNewPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '8px 12px' }}>
-              <input type="text" value={newPlayerForm.name} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, name: e.target.value })} placeholder="Full Name" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              <input type="email" value={newPlayerForm.email} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, email: e.target.value })} placeholder="Email Address" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-              <input type="tel" value={newPlayerForm.phone} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, phone: e.target.value })} placeholder="Phone Number (Optional)" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              <input type="text" value={newPlayerForm.name} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, name: e.target.value })} placeholder="Full Name" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }} />
+              <input type="email" value={newPlayerForm.email} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, email: e.target.value })} placeholder="Email Address" required style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }} />
+              <input type="tel" value={newPlayerForm.phone} onChange={(e) => setNewPlayerForm({ ...newPlayerForm, phone: e.target.value })} placeholder="Phone Number (Optional)" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }} />
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                 <button type="button" onClick={() => setAddPlayerOpen(false)} style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                 <button type="submit" style={{ flex: 1, padding: '10px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>Save Player</button>
