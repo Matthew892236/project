@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Trash2, Loader2, Mail, GripVertical, Send, X, Edit, Search, Settings, ChevronUp, ChevronDown, Plus } from 'lucide-react';
+import { Users, Trash2, Loader2, Mail, GripVertical, Send, X, Edit, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core'; 
@@ -76,7 +76,7 @@ function SortablePlayerRow({ player, onDelete, onEmailClick, onEditClick }: { pl
       </div>
 
       <div style={{ width: '80px' }}>
-        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, backgroundColor: player.status === 'Active' ? '#dcfce7' : '#fef3c7', color: player.status === 'Active' ? '#166534' : '#92400e' }}>
+        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, backgroundColor: player.status === 'Active' ? '#dcfce7' : '#166534', color: player.status === 'Active' ? '#166534' : '#92400e', background: player.status === 'Spare' ? '#fef3c7' : undefined }}>
           {player.status}
         </span>
       </div>
@@ -100,10 +100,6 @@ export default function BandRoster() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [concerts, setConcerts] = useState<Concert[]>([]); 
   const [bandId, setBandId] = useState<number | null>(null);
-  const [bandInstruments, setBandInstruments] = useState<string[]>(STANDARD_INSTRUMENTS);
-  const [manageSectionsOpen, setManageSectionsOpen] = useState(false);
-  const [editInstruments, setEditInstruments] = useState<string[]>([]);
-  const [newInstName, setNewInstName] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +109,6 @@ export default function BandRoster() {
 
   const [name, setName] = useState('');
   const [instrument, setInstrument] = useState('');
-  const [customAddInstrument, setCustomAddInstrument] = useState('');
   const [secondaryInstrumentsInput, setSecondaryInstrumentsInput] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -121,7 +116,6 @@ export default function BandRoster() {
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editPlayer, setEditPlayer] = useState<Player | null>(null);
-  const [editCustomInstrument, setEditCustomInstrument] = useState('');
   const [editSecondaryInput, setEditSecondaryInput] = useState('');
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -147,9 +141,7 @@ export default function BandRoster() {
       const { data: band } = await supabase.from('bands').select('*').eq('manager_id', userData.user.id).maybeSingle();
       if (!band) return setLoading(false);
       setBandId(band.id);
-      if (band.instrumentation && Array.isArray(band.instrumentation)) {
-        setBandInstruments(band.instrumentation);
-      }
+      
       const [rosterData, concertsData] = await Promise.all([
         supabase.from('players').select('*').eq('band_id', band.id).order('sort_order'),
         supabase.from('concerts').select('id, name, concert_date').eq('band_id', band.id).eq('status', 'live').order('concert_date')
@@ -159,71 +151,27 @@ export default function BandRoster() {
     } catch (err: any) { setError(err.message || "Failed to load roster configuration."); } finally { setLoading(false); }
   }
 
-  function openManageSections() {
-    setEditInstruments([...bandInstruments]);
-    setNewInstName('');
-    setManageSectionsOpen(true);
-  }
-
-  function moveInstUp(index: number) {
-    if (index === 0) return;
-    const newArr = [...editInstruments];
-    [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
-    setEditInstruments(newArr);
-  }
-
-  function moveInstDown(index: number) {
-    if (index === editInstruments.length - 1) return;
-    const newArr = [...editInstruments];
-    [newArr[index + 1], newArr[index]] = [newArr[index], newArr[index + 1]];
-    setEditInstruments(newArr);
-  }
-
-  function removeInst(index: number) {
-    setEditInstruments(prev => prev.filter((_, i) => i !== index));
-  }
-
-  function addInst() {
-    if (!newInstName.trim()) return;
-    setEditInstruments(prev => [...prev, newInstName.trim()]);
-    setNewInstName('');
-  }
-
-  async function saveInstrumentation() {
-    if (!bandId) return;
-    setSubmitting(true);
-    try {
-      const { error: updateError } = await supabase.from('bands').update({ instrumentation: editInstruments }).eq('id', bandId);
-      if (updateError) throw updateError;
-      setBandInstruments(editInstruments);
-      setSuccess("Instrumentation updated.");
-      setManageSectionsOpen(false);
-    } catch { setError("Database synchronization blocked."); } finally { setSubmitting(false); }
-  }
-
   async function handleAddPlayer(e: React.FormEvent) {
     e.preventDefault();
     if (!bandId) return setError("No active band profile resolved.");
     setSubmitting(true); setError(null); setSuccess(null);
-    const finalInstrument = instrument === 'custom' ? customAddInstrument.trim() : instrument;
+    
     const cleanEmail = email.trim().toLowerCase();
     const cleanTags = secondaryInstrumentsInput.split(',').map(t => t.trim()).filter(t => t !== '');
 
     try {
-      const sectionPlayers = players.filter(p => p.instrument === finalInstrument);
-      const { data: newPlayer, error: insErr } = await supabase.from('players').insert({ name: name.trim(), instrument: finalInstrument, email: cleanEmail, phone: phone.trim() || null, status, band_id: bandId, sort_order: sectionPlayers.length, tags: cleanTags }).select().single();
+      const sectionPlayers = players.filter(p => p.instrument === instrument);
+      const { data: newPlayer, error: insErr } = await supabase.from('players').insert({ name: name.trim(), instrument: instrument, email: cleanEmail, phone: phone.trim() || null, status, band_id: bandId, sort_order: sectionPlayers.length, tags: cleanTags }).select().single();
       if (insErr) throw insErr;
       setPlayers(prev => [...prev, newPlayer as Player]);
       setSuccess(`${name.trim()} added successfully!`);
-      setName(''); setInstrument(''); setCustomAddInstrument(''); setSecondaryInstrumentsInput(''); setEmail(''); setPhone(''); setStatus('Active');
+      setName(''); setInstrument(''); setSecondaryInstrumentsInput(''); setEmail(''); setPhone(''); setStatus('Active');
     } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
   }
 
   function openEditModal(player: Player) {
     setEditPlayer({ ...player });
-    setEditCustomInstrument(bandInstruments.includes(player.instrument) ? '' : player.instrument);
     setEditSecondaryInput(player.tags ? player.tags.join(', ') : '');
-    if (!bandInstruments.includes(player.instrument)) { setEditPlayer({ ...player, instrument: 'custom' }); }
     setEditModalOpen(true);
   }
 
@@ -231,13 +179,13 @@ export default function BandRoster() {
     e.preventDefault();
     if (!editPlayer) return;
     setSubmitting(true);
-    const finalInstrument = editPlayer.instrument === 'custom' ? editCustomInstrument.trim() : editPlayer.instrument;
+    
     const cleanTags = editSecondaryInput.split(',').map(t => t.trim()).filter(t => t !== '');
 
     try {
-      const { error: upErr } = await supabase.from('players').update({ name: editPlayer.name.trim(), instrument: finalInstrument, email: editPlayer.email.trim().toLowerCase(), phone: editPlayer.phone?.trim() || null, status: editPlayer.status, tags: cleanTags }).eq('id', editPlayer.id);
+      const { error: upErr } = await supabase.from('players').update({ name: editPlayer.name.trim(), instrument: editPlayer.instrument, email: editPlayer.email.trim().toLowerCase(), phone: editPlayer.phone?.trim() || null, status: editPlayer.status, tags: cleanTags }).eq('id', editPlayer.id);
       if (upErr) throw upErr;
-      setPlayers(prev => prev.map(p => p.id === editPlayer.id ? { ...editPlayer, instrument: finalInstrument, tags: cleanTags } : p));
+      setPlayers(prev => prev.map(p => p.id === editPlayer.id ? { ...editPlayer, tags: cleanTags } : p));
       setSuccess("Profile updated.");
       setEditModalOpen(false);
     } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
@@ -293,12 +241,10 @@ export default function BandRoster() {
 
     if (!targetInstrument) return;
 
-    // 🌟 FULL FREEDOM: No isMoveAllowed checks. Move ANYONE to ANY SEAT.
     let newPlayers = [...players];
     const activeIdx = newPlayers.findIndex(p => p.id === activePlayer.id);
 
     if (activePlayer.instrument === targetInstrument) {
-      // Reordering within the SAME section
       const section = newPlayers.filter(p => p.instrument === targetInstrument && p.status === 'Active');
       const oIdx = section.findIndex(p => p.id === active.id);
       const nIdx = section.findIndex(p => p.id === over.id);
@@ -306,7 +252,6 @@ export default function BandRoster() {
       setPlayers([...newPlayers.filter(p => !(p.instrument === targetInstrument && p.status === 'Active')), ...reorderedSection]);
       await Promise.all(reorderedSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
     } else {
-      // Moving to a DIFFERENT section
       const movingPlayer = { ...newPlayers[activeIdx], instrument: targetInstrument };
       newPlayers.splice(activeIdx, 1);
       
@@ -342,11 +287,8 @@ export default function BandRoster() {
 
   const activePlayers = players.filter(p => p.status === 'Active');
   const sparePlayers = players.filter(p => p.status === 'Spare');
-  const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
-  const displayInstruments = Array.from(new Set([...bandInstruments, ...existingInstruments]));
   
-  const filteredInstruments = displayInstruments.filter(inst => {
-    // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
+  const filteredInstruments = STANDARD_INSTRUMENTS.filter(inst => {
     const seatPlayers = activePlayers.filter(p => p.instrument === inst);
     if (hideEmpty && seatPlayers.length === 0) return false;
     if (searchQuery.trim() !== '') {
@@ -355,8 +297,12 @@ export default function BandRoster() {
     return true;
   });
 
-  const visibleSpares = searchQuery.trim() !== '' 
-    ? sparePlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+const visibleSpares = searchQuery.trim() !== '' 
+    ? sparePlayers.filter(p => 
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        p.instrument.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.tags && p.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())))
+      )
     : sparePlayers;
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}><Loader2 className="animate-spin" /> Loading Roster Dashboard...</div>;
@@ -389,12 +335,10 @@ export default function BandRoster() {
             <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
               <div style={{ padding: '10px 16px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                  <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Current Instrumentation Grid</h2>
-                 <button onClick={openManageSections} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}><Settings size={12} /> Edit Sections</button>
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {filteredInstruments.map(inst => {
-                  // 🌟 REMOVED TAG CHECK: Only checks exact primary instrument match now
                   const seatPlayers = activePlayers.filter(p => p.instrument === inst);
                   const visiblePlayers = searchQuery.trim() !== '' ? seatPlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) : seatPlayers;
                   return (
@@ -434,10 +378,8 @@ export default function BandRoster() {
             <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
             <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px', outline: 'none' }}>
               <option value="">Primary instrument...</option>
-              {bandInstruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}
-              <option value="custom">+ Custom Instrument...</option>
+              {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
             </select>
-            {instrument === 'custom' && <input type="text" required value={customAddInstrument} onChange={e => setCustomAddInstrument(e.target.value)} placeholder="Custom instrument name..." style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #2563eb', fontSize: '13px', backgroundColor: '#eff6ff' }} />}
             <input type="text" value={secondaryInstrumentsInput} onChange={e => setSecondaryInstrumentsInput(e.target.value)} placeholder="Secondary Instruments (e.g. Solo Horn, 1st Horn)" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
             <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px' }}>
               <option value="Active">Active Core Player</option>
@@ -449,39 +391,6 @@ export default function BandRoster() {
           </form>
         </div>
       </div>
-
-      {manageSectionsOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
-          <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Manage Instrumentation</h3>
-              <button type="button" onClick={() => setManageSectionsOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {editInstruments.map((inst, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{inst}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button onClick={() => moveInstUp(idx)} disabled={idx === 0} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer' }}><ChevronUp size={16}/></button>
-                      <button onClick={() => moveInstDown(idx)} disabled={idx === editInstruments.length - 1} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer' }}><ChevronDown size={16}/></button>
-                      <button onClick={() => removeInst(idx)} style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={16}/></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                <input type="text" value={newInstName} onChange={e => setNewInstName(e.target.value)} placeholder="Add new section name..." style={{ flex: 1, padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
-                <button type="button" onClick={addInst} style={{ padding: '10px 16px', background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}><Plus size={16} /></button>
-              </div>
-            </div>
-            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#fff' }}>
-              <button type="button" onClick={() => setManageSectionsOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
-              <button type="button" onClick={saveInstrumentation} disabled={submitting} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>{submitting ? 'Saving...' : 'Save Configuration'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {editModalOpen && editPlayer && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
@@ -498,12 +407,8 @@ export default function BandRoster() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Primary Instrument</label>
                 <select required value={editPlayer.instrument} onChange={e => setEditPlayer({...editPlayer, instrument: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
-                  {bandInstruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}
-                  <option value="custom">+ Custom / Other...</option>
+                  {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
                 </select>
-                {editPlayer.instrument === 'custom' && (
-                  <input type="text" required value={editCustomInstrument} onChange={e => setEditCustomInstrument(e.target.value)} placeholder="Type custom instrument name..." style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #2563eb', fontSize: '14px', backgroundColor: '#eff6ff', marginTop: '4px' }} />
-                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Secondary Instruments / Tags</label>

@@ -33,12 +33,7 @@ Deno.serve(async (req) => {
       concertDetails = concert;
     }
 
-    let derivedName = "Upcoming Performance";
-    if (subject && subject.includes(":")) derivedName = subject.split(":").pop()?.trim() || derivedName;
-    else if (subject && subject.includes("-")) derivedName = subject.split("-").pop()?.trim() || derivedName;
-    else if (subject) derivedName = subject;
-
-    const concertNameDisplay = concertDetails?.name || concertDetails?.concert_name || concertDetails?.title || derivedName;
+    const concertNameDisplay = concertDetails?.name || concertDetails?.concert_name || concertDetails?.title || "Upcoming Performance";
     const concertDateDisplay = formatDateUK(concertDetails?.concert_date || concertDetails?.date);
     const concertVenueDisplay = concertDetails?.venue || concertDetails?.location || "TBD";
 
@@ -76,15 +71,16 @@ Deno.serve(async (req) => {
       const matrixLink = `https://brassbandwidth.netlify.app/band-view?uid=${player.band_id || bandId}`;
       const isSpareRecipient = player.status === 'Spare' || player.is_global_spare === true || (concertDetails && player.band_id !== concertDetails.band_id) || (!player.band_id);
 
-      // 🌟 FIX 1: Auto-generate the correct subject line here!
-      const emailHeaderTitle = isSpareRecipient ? `Dep Request - ${concertNameDisplay}` : `Availability Request - ${concertNameDisplay}`;
-      const finalSubject = subject || emailHeaderTitle; 
+      // 🌟 THE FIX: Force the correct subject title even if it's missing!
+      const safeSubject = (subject && subject.trim().length > 0) 
+        ? subject 
+        : (isSpareRecipient ? `Dep request - ${concertNameDisplay}` : `Availability Request - ${concertNameDisplay}`);
 
       const emailIntroText = isSpareRecipient ? `<strong>${bandName}</strong> is looking for a dep on <strong>${player.instrument || 'your instrument'}</strong> for their upcoming concert.` : `Please confirm your availability for our upcoming event: <strong>${concertNameDisplay}</strong>.`;
 
       let htmlBody = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">${!showButtons ? finalSubject : emailHeaderTitle} 🎺</h2>
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">${safeSubject} 🎺</h2>
           <p style="color: #334155; font-size: 16px;">Hi ${player.name.split(' ')[0]},</p>
           ${showButtons ? `<p style="color: #334155; font-size: 16px; lineHeight: 1.5;">${emailIntroText}</p>` : ''}
           ${message ? `<p style="color: #334155; font-size: 14px; white-space: pre-wrap; ${showButtons ? 'font-style: italic; background: #f1f5f9; padding: 12px; border-radius: 6px;' : ''}">${message}</p>` : ''}
@@ -130,10 +126,9 @@ Deno.serve(async (req) => {
         </div>
       `;
 
-      // 🌟 FIX: Ensuring finalSubject is handed to Resend here
       await fetch("https://api.resend.com/emails", {
         method: "POST", headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `"${bandName}" <Admin@brassbandwidth.com>`, reply_to: replyToEmail, to: player.email, subject: finalSubject, html: htmlBody }),
+        body: JSON.stringify({ from: `"${bandName}" <Admin@brassbandwidth.com>`, reply_to: replyToEmail, to: player.email, subject: safeSubject, html: htmlBody }),
       });
     }
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
