@@ -25,7 +25,6 @@ export default function Respond() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [registryData, setRegistryData] = useState<any | null>(null);
-  const [submitted, setSubmitted] = useState<AvailabilityStatus | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [directStatus, setDirectStatus] = useState<string | null>(null);
 
@@ -53,7 +52,6 @@ export default function Respond() {
   async function processDirectAction(player_id: string, concert_id: string, action: string) {
     setState('submitting');
     
-    // Attempt 1: Try the Edge Function backend
     try {
       const { data, error } = await supabase.functions.invoke('dep-response', {
         body: { pid: player_id, cid: concert_id, act: action }
@@ -67,7 +65,6 @@ export default function Respond() {
       console.warn("Edge function unreachable, processing direct database action...", err);
     }
 
-    // Attempt 2: Direct Database Fallback (with the Blocker built in!)
     try {
       const { data: availRows, error: fetchErr } = await supabase
         .from('availability')
@@ -79,29 +76,24 @@ export default function Respond() {
       const isAccept = action.toLowerCase().includes('accept');
       const isDecline = action.toLowerCase().includes('decline');
 
-      // Find the row this player is associated with (either as Core or as a Contacted Spare)
       const targetRow = availRows?.find(r => r.player_id === player_id) || 
                         availRows?.find(r => r.approached_spares && Array.isArray(r.approached_spares) && r.approached_spares.some((s: any) => s.id === player_id));
 
       if (targetRow) {
          const currentStatus = targetRow.status as string;
 
-         // 🛡️ THE PROTECTIVE BLOCKER
          if (currentStatus !== 'Not Responded' && currentStatus !== 'Spares Contacted' && currentStatus !== 'Deps Contacted') {
-             // 1. Seat already taken by someone else
              if ((currentStatus === 'Available' && targetRow.player_id !== player_id) || 
                  (currentStatus === 'Spare Assigned' && targetRow.spare_player_id !== player_id && targetRow.player_id !== player_id)) {
                  setDirectStatus('contact-manager');
                  setState('done');
                  return;
              }
-             // 2. Already Accepted, but now clicked Decline
              if (isDecline && (currentStatus === 'Available' || currentStatus === 'Spare Assigned')) {
                  setDirectStatus('contact-manager');
                  setState('done');
                  return;
              }
-             // 3. Already Declined, but now clicked Accept
              if (isAccept && currentStatus === 'Not Available') {
                  setDirectStatus('contact-manager');
                  setState('done');
@@ -109,9 +101,7 @@ export default function Respond() {
              }
          }
 
-         // If they pass the blocker, update the database!
          if (targetRow.player_id === player_id) {
-             // Core Player Update
              if (isAccept) {
                 await supabase.from('availability').update({ status: 'Available' }).eq('player_id', player_id).eq('concert_id', concert_id);
                 setDirectStatus('accepted');
@@ -120,7 +110,6 @@ export default function Respond() {
                 setDirectStatus('declined');
              }
          } else {
-             // Spare Player Update
              if (isAccept) {
                 await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).eq('player_id', targetRow.player_id).eq('concert_id', concert_id);
                 setDirectStatus('accepted');
@@ -176,7 +165,8 @@ export default function Respond() {
       setErrorMsg('Failed to save your response. Please try again.');
       return;
     }
-    setSubmitted(status);
+    // 🌟 Replaced setSubmitted with setDirectStatus!
+    setDirectStatus(status);
     setState('done');
   }
 
@@ -222,7 +212,7 @@ export default function Respond() {
           <div style={{ padding: '10px 0' }}>
             <AlertTriangle size={56} color="#eab308" style={{ margin: '0 auto 16px auto' }} />
             <h2 style={{ color: '#0f172a', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Seat Already Filled</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>If you are trying to change an existing response. Please contact the band manager directly to update your status.</p>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Another player has already accepted this position (or you are trying to change an existing response). Please contact the band manager directly to update your status.</p>
           </div>
         );
       }
@@ -243,6 +233,16 @@ export default function Respond() {
             <XCircle size={56} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
             <h2 style={{ color: '#991b1b', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Response Recorded</h2>
             <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your decline response has been logged. The scheduler will now automatically offer the seat to the next backup player on the system. Thanks for replying quickly!</p>
+          </div>
+        );
+      }
+
+      if (mode === 'registry') {
+        return (
+          <div style={{ padding: '10px 0' }}>
+            <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
+            <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>You're on the list! 🌐</h2>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Thanks! You've successfully joined the global spare registry as a <strong>{registryData?.instrument}</strong>.</p>
           </div>
         );
       }
