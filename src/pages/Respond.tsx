@@ -30,23 +30,20 @@ export default function Respond() {
   const [directStatus, setDirectStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Check for instant status in URL
     if (quickResponse) {
       setDirectStatus(quickResponse);
       setState('done');
       return;
     }
     
-    // 2. Check for action triggers (Email cascade bypass)
     if (pid && cid && act) {
       processDirectAction(pid, cid, act);
       return;
     }
 
-    // 3. Fallback to standard token
     if (!token) {
       setState('error');
-      setErrorMsg('No response parameters or token provided in the link.');
+      setErrorMsg('No response parameters or token provided in this link.');
       return;
     }
     
@@ -55,12 +52,87 @@ export default function Respond() {
 
   async function processDirectAction(player_id: string, concert_id: string, action: string) {
     setState('submitting');
+    
+    // Attempt 1: Try the Edge Function backend
     try {
       const { data, error } = await supabase.functions.invoke('dep-response', {
         body: { pid: player_id, cid: concert_id, act: action }
       });
-      if (error) throw error;
-      setDirectStatus(data.status);
+      if (!error && data?.status) {
+        setDirectStatus(data.status);
+        setState('done');
+        return;
+      }
+    } catch (err) {
+      console.warn("Edge function unreachable, processing direct database action...", err);
+    }
+
+    // Attempt 2: Direct Database Fallback (with the Blocker built in!)
+    try {
+      const { data: availRows, error: fetchErr } = await supabase
+        .from('availability')
+        .select('*')
+        .eq('concert_id', concert_id);
+
+      if (fetchErr) throw fetchErr;
+
+      const isAccept = action.toLowerCase().includes('accept');
+      const isDecline = action.toLowerCase().includes('decline');
+
+      // Find the row this player is associated with (either as Core or as a Contacted Spare)
+      const targetRow = availRows?.find(r => r.player_id === player_id) || 
+                        availRows?.find(r => r.approached_spares && Array.isArray(r.approached_spares) && r.approached_spares.some((s: any) => s.id === player_id));
+
+      if (targetRow) {
+         const currentStatus = targetRow.status as string;
+
+         // 🛡️ THE PROTECTIVE BLOCKER
+         if (currentStatus !== 'Not Responded' && currentStatus !== 'Spares Contacted' && currentStatus !== 'Deps Contacted') {
+             // 1. Seat already taken by someone else
+             if ((currentStatus === 'Available' && targetRow.player_id !== player_id) || 
+                 (currentStatus === 'Spare Assigned' && targetRow.spare_player_id !== player_id && targetRow.player_id !== player_id)) {
+                 setDirectStatus('contact-manager');
+                 setState('done');
+                 return;
+             }
+             // 2. Already Accepted, but now clicked Decline
+             if (isDecline && (currentStatus === 'Available' || currentStatus === 'Spare Assigned')) {
+                 setDirectStatus('contact-manager');
+                 setState('done');
+                 return;
+             }
+             // 3. Already Declined, but now clicked Accept
+             if (isAccept && currentStatus === 'Not Available') {
+                 setDirectStatus('contact-manager');
+                 setState('done');
+                 return;
+             }
+         }
+
+         // If they pass the blocker, update the database!
+         if (targetRow.player_id === player_id) {
+             // Core Player Update
+             if (isAccept) {
+                await supabase.from('availability').update({ status: 'Available' }).eq('player_id', player_id).eq('concert_id', concert_id);
+                setDirectStatus('accepted');
+             } else if (isDecline) {
+                await supabase.from('availability').update({ status: 'Not Available' }).eq('player_id', player_id).eq('concert_id', concert_id);
+                setDirectStatus('declined');
+             }
+         } else {
+             // Spare Player Update
+             if (isAccept) {
+                await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).eq('player_id', targetRow.player_id).eq('concert_id', concert_id);
+                setDirectStatus('accepted');
+             } else if (isDecline) {
+                const nextIndex = (targetRow.current_approach_index || 0) + 1;
+                await supabase.from('availability').update({ current_approach_index: nextIndex }).eq('player_id', targetRow.player_id).eq('concert_id', concert_id);
+                setDirectStatus('declined');
+             }
+         }
+      } else {
+         setDirectStatus('error');
+      }
       setState('done');
     } catch (err) {
       setDirectStatus('error');
@@ -71,14 +143,12 @@ export default function Respond() {
   async function determineTokenRoute() {
     try {
       const { data: playerMatch } = await supabase.from('players').select('id, name, instrument, bands ( name )').eq('secure_token', token).maybeSingle();
-
       if (playerMatch) {
         setMode('registry');
         setRegistryData(playerMatch);
         setState('ready');
         return;
       }
-
       setMode('concert');
       await loadConcertToken();
     } catch (err: any) {
@@ -125,7 +195,6 @@ export default function Respond() {
     ? new Date(tokenData.concert.concert_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : '';
 
-  // --- RENDER LOGIC ---
   function renderContent() {
     if (state === 'loading' || state === 'submitting') {
       return (
@@ -146,81 +215,45 @@ export default function Respond() {
     }
 
     if (state === 'done') {
-      const ds = directStatus?.toLowerCase().replace('_', ' ') || '';
-      const isSuccess = ['accepted', 'available', 'spare assigned'].includes(ds);
-      const isDeclined = ['declined', 'not available'].includes(ds);
-      const isFilled = ds === 'contact-manager' || ds === 'filled';
-      const isError = ds === 'error' || ds === 'unknown';
-
-      if (directStatus) {
-        if (isFilled) return (
+      const ds = directStatus?.toLowerCase().trim() || '';
+      
+      if (ds === 'contact-manager' || ds === 'filled') {
+        return (
           <div style={{ padding: '10px 0' }}>
             <AlertTriangle size={56} color="#eab308" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#0f172a', margin: '0 0 12px 0', fontSize: '22px' }}>Seat Already Filled</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Another player has already accepted this gig. Please contact the band manager directly if you need to change your status.</p>
-          </div>
-        );
-        if (isSuccess) return (
-          <div style={{ padding: '10px 0' }}>
-            <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px' }}>Gig Confirmed!</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your availability has been updated to Green. The manager has been notified. Thank you!</p>
-          </div>
-        );
-        if (isDeclined) return (
-          <div style={{ padding: '10px 0' }}>
-            <XCircle size={56} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#991b1b', margin: '0 0 12px 0', fontSize: '22px' }}>Response Recorded</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your response has been logged. Thanks for letting us know quickly!</p>
-          </div>
-        );
-        if (isError) return (
-          <div style={{ padding: '10px 0' }}>
-            <XCircle size={56} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#991b1b', margin: '0 0 12px 0', fontSize: '22px' }}>Oops! Something went wrong</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>We couldn't securely verify your status link. Please contact the band manager directly to update your status.</p>
-          </div>
-        );
-        
-        // Safety Fallback for directStatus
-        return (
-          <div style={{ padding: '10px 0' }}>
-            <CheckCircle size={56} color="#0ea5e9" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#0284c7', margin: '0 0 12px 0', fontSize: '22px' }}>Response Recorded</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your status has been updated to: <strong>{directStatus}</strong></p>
+            <h2 style={{ color: '#0f172a', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Seat Already Filled</h2>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>If you are trying to change an existing response. Please contact the band manager directly to update your status.</p>
           </div>
         );
       }
 
-      if (submitted) {
-        if (submitted === 'Available') return (
-          <div style={{ padding: '10px 0' }}>
-            <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px' }}>Great, you're in!</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>You've been marked as <strong>Available</strong> for {tokenData?.concert.name}.</p>
-          </div>
-        );
-        if (submitted === 'Not Available') return (
-          <div style={{ padding: '10px 0' }}>
-            <XCircle size={56} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#991b1b', margin: '0 0 12px 0', fontSize: '22px' }}>Thanks for letting us know</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>You've been marked as <strong>Not Available</strong> for {tokenData?.concert.name}.</p>
-          </div>
-        );
-      }
-
-      if (mode === 'registry') {
+      if (ds === 'accepted' || ds === 'available' || ds === 'spare assigned') {
         return (
           <div style={{ padding: '10px 0' }}>
             <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
-            <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px' }}>You're on the list! 🌐</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Thanks! You've successfully joined the global spare registry as a <strong>{registryData?.instrument}</strong>.</p>
+            <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Gig Confirmed!</h2>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your availability has been successfully registered as Green. The band manager has been instantly notified. Thank you!</p>
           </div>
         );
       }
 
-      // Extreme safety fallback
-      return <p style={{ color: '#ef4444' }}>Status recorded successfully, but no message format could be determined.</p>;
+      if (ds === 'declined' || ds === 'not available') {
+        return (
+          <div style={{ padding: '10px 0' }}>
+            <XCircle size={56} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
+            <h2 style={{ color: '#991b1b', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Response Recorded</h2>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your decline response has been logged. The scheduler will now automatically offer the seat to the next backup player on the system. Thanks for replying quickly!</p>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ padding: '10px 0' }}>
+          <CheckCircle size={56} color="#0ea5e9" style={{ margin: '0 auto 16px auto' }} />
+          <h2 style={{ color: '#0284c7', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>Response Processed</h2>
+          <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Your submission has been filed into the roster database. (Status: {directStatus || 'Received'})</p>
+        </div>
+      );
     }
 
     if (state === 'ready') {
@@ -230,7 +263,7 @@ export default function Respond() {
             <p style={{ fontSize: '16px', color: '#334155', margin: '0 0 8px 0' }}>Hi <strong>{registryData.name}</strong>,</p>
             <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.5', margin: '0 0 24px 0' }}>Your manager at <strong>{registryData.bands?.name || 'your band'}</strong> has invited you to join the regional spare registry.</p>
             <div style={{ textAlign: 'left', padding: '20px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
-              <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a' }}>What does this mean?</h3>
+              <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a',  fontWeight: 700 }}>What does this mean?</h3>
               <p style={{ margin: 0, fontSize: '13.5px', color: '#475569', lineHeight: '1.6' }}>By clicking the button below, your name and instrument (<strong>{registryData.instrument}</strong>) will become safely discoverable to other local band managers when they are short of players for an upcoming gig. Your contact details remain completely private until you explicitly accept a booking request.</p>
             </div>
             <div style={{ marginTop: '24px' }}>
@@ -246,7 +279,7 @@ export default function Respond() {
             <p style={{ fontSize: '16px', color: '#334155', margin: '0 0 8px 0' }}>Hi <strong>{tokenData.player.name}</strong>,</p>
             <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.5', margin: '0 0 24px 0' }}>Are you available for the following concert?</p>
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', textAlign: 'left', marginBottom: '24px' }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#0f172a', fontSize: '18px' }}>{tokenData.concert.name}</h2>
+              <h2 style={{ margin: '0 0 16px 0', color: '#0f172a', fontSize: '18px', fontWeight: 700 }}>{tokenData.concert.name}</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', color: '#475569' }}>
                 <div>📅 <strong>Date:</strong> {concertDate}</div>
                 <div>🕐 <strong>Time:</strong> {tokenData.concert.start_time.slice(0, 5)} – {tokenData.concert.end_time.slice(0, 5)}</div>
@@ -262,8 +295,7 @@ export default function Respond() {
       }
     }
 
-    // Ultimate fallback if state/data completely mismatches
-    return <p style={{ color: '#ef4444' }}>Unable to determine link payload. Please request a new link.</p>;
+    return <p style={{ color: '#ef4444' }}>Unable to parse submission route parameters. Please request a fresh invitation link.</p>;
   }
 
   return (

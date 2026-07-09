@@ -36,7 +36,6 @@ export default function Overview() {
       const [playersRes, concertsRes, availabilityRes] = await Promise.all([
         supabase.from('players').select('*').eq('band_id', band.id).order('instrument, name'),
         supabase.from('concerts').select('*').eq('band_id', band.id).order('concert_date'),
-        // 🌟 THE FIX: Removed .eq('band_id') since this join table relies on player_id/concert_id!
         supabase.from('availability').select('*')
       ]);
 
@@ -100,14 +99,11 @@ export default function Overview() {
   const pendingConcerts = concerts.filter((c) => c.status === 'pending');
   const nextConcert = liveConcerts[0] ?? null;
 
-  // 🌟 BULLETPROOF MATH ENGINE
   const liveConcertIds = new Set(liveConcerts.map((c) => c.id));
   const activePlayerIds = new Set(activePlayers.map((p) => p.id));
   
-  // Total expected responses = Every core player x Every live gig
   const totalExpectedResponses = activePlayers.length * liveConcerts.length;
 
-  // 🌟 THE FIX: Count ANY valid state that isn't "Not Responded" for a core chair
   const respondedCount = availability.filter(
     (a) => liveConcertIds.has(a.concert_id) && 
            activePlayerIds.has(a.player_id) && 
@@ -117,13 +113,11 @@ export default function Overview() {
   let responseRate = 0;
   if (totalExpectedResponses > 0) {
     responseRate = Math.round((respondedCount / totalExpectedResponses) * 100);
-    if (responseRate > 100) responseRate = 100; // Safeguard limit
+    if (responseRate > 100) responseRate = 100;
   }
 
-  // True Pending Responses: Expected minus what we actually have
   const truePendingResponses = totalExpectedResponses > 0 ? (totalExpectedResponses - respondedCount) : 0;
 
-  // Total Available Count (Core players + Assigned Spares)
   const availableCount = availability.filter(
     (a) => liveConcertIds.has(a.concert_id) && 
            (a.status === 'Available' || a.status === 'Spare Assigned')
@@ -134,7 +128,6 @@ export default function Overview() {
   return (
     <div style={{ padding: '32px', fontFamily: 'system-ui, sans-serif', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
       
-      {/* 🌟 UNIFIED MASTER PAGE HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <LayoutDashboard size={36} color="#1e3a5f" />
@@ -152,7 +145,6 @@ export default function Overview() {
         </button>
       </div>
 
-      {/* 🌟 UNIFIED STATS GRID */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '24px', marginBottom: '32px' }}>
         
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -199,10 +191,8 @@ export default function Overview() {
 
       </div>
 
-      {/* LOWER DATA GRIDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         
-        {/* Next Concert Card */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Next Live Concert</h2>
@@ -222,13 +212,16 @@ export default function Overview() {
                     <CheckCircle size={14} />
                     {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Available').length} Available
                   </div>
+                  
+                  {/* 🌟 MOVED SPARES ASSIGNED TO BE IN THE MIDDLE */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#dbeafe', color: '#1e40af', padding: '6px 12px', borderRadius: '20px', border: '1px solid #bfdbfe' }}>
+                    <Users size={14} />
+                    {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Spare Assigned').length} Spares Assigned
+                  </div>
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#fef2f2', color: '#991b1b', padding: '6px 12px', borderRadius: '20px' }}>
                     <XCircle size={14} />
                     {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Not Available').length} Not Available
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff7ed', color: '#c2410c', padding: '6px 12px', borderRadius: '20px', border: '1px solid #ffedd5' }}>
-                    <Users size={14} />
-                    {availability.filter((a) => a.concert_id === nextConcert.id && a.status === 'Spare Assigned').length} Spares Assigned
                   </div>
                 </div>
               </div>
@@ -238,7 +231,6 @@ export default function Overview() {
           </div>
         </div>
 
-        {/* Concert Status Card */}
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Concert Status</h2>
@@ -266,7 +258,6 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* 🌟 UNIFIED EMAIL MODAL OVERLAY */}
       {composeOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
           <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
