@@ -82,14 +82,14 @@ export default function Respond() {
       if (targetRow) {
          const currentStatus = targetRow.status as string;
 
-         if (currentStatus !== 'Not Responded' && currentStatus !== 'Spares Contacted' && currentStatus !== 'Deps Contacted') {
+         if (currentStatus !== 'Not Responded' && currentStatus !== 'Deps Contacted' && currentStatus !== 'Deps Contacted') {
              if ((currentStatus === 'Available' && targetRow.player_id !== player_id) || 
-                 (currentStatus === 'Spare Assigned' && targetRow.spare_player_id !== player_id && targetRow.player_id !== player_id)) {
+                 (currentStatus === 'Dep Assigned' && targetRow.spare_player_id !== player_id && targetRow.player_id !== player_id)) {
                  setDirectStatus('contact-manager');
                  setState('done');
                  return;
              }
-             if (isDecline && (currentStatus === 'Available' || currentStatus === 'Spare Assigned')) {
+             if (isDecline && (currentStatus === 'Available' || currentStatus === 'Dep Assigned')) {
                  setDirectStatus('contact-manager');
                  setState('done');
                  return;
@@ -111,7 +111,7 @@ export default function Respond() {
              }
          } else {
              if (isAccept) {
-                await supabase.from('availability').update({ status: 'Spare Assigned', spare_player_id: player_id }).eq('player_id', targetRow.player_id).eq('concert_id', concert_id);
+                await supabase.from('availability').update({ status: 'Dep Assigned', spare_player_id: player_id }).eq('player_id', targetRow.player_id).eq('concert_id', concert_id);
                 setDirectStatus('accepted');
              } else if (isDecline) {
                 const nextIndex = (targetRow.current_approach_index || 0) + 1;
@@ -170,14 +170,35 @@ export default function Respond() {
     setState('done');
   }
 
-  async function handleRegistryOptIn() {
+async function handleRegistryOptIn() {
     setState('submitting');
-    const { error } = await supabase.from('players').update({ is_global_spare: true }).eq('secure_token', token);
-    if (error) {
+    
+    try {
+      // Step 1: Secure Edge Function bypasses database locks
+      const { data, error } = await supabase.functions.invoke('dep-response', {
+        body: { pid: registryData.id, cid: 'registry', act: 'join-network' }
+      });
+      
+      if (!error && (data?.status === 'welcome' || data?.status === 'success')) {
+        setState('done');
+        return;
+      }
+    } catch (err) {
+      console.warn("Edge function unreachable, trying direct DB update...");
+    }
+
+    // Step 2: Fallback (adding .select() forces Supabase to prove the row updated)
+    const { data, error } = await supabase.from('players')
+      .update({ is_global_spare: true })
+      .eq('id', registryData.id)
+      .select();
+
+    if (error || !data || data.length === 0) {
       setState('error');
-      setErrorMsg('Failed to join the registry. Please try again.');
+      setErrorMsg('Security blocker prevented update. Please try again later.');
       return;
     }
+    
     setState('done');
   }
 
@@ -217,7 +238,7 @@ export default function Respond() {
         );
       }
 
-      if (ds === 'accepted' || ds === 'available' || ds === 'spare assigned') {
+      if (ds === 'accepted' || ds === 'available' || ds === 'Dep assigned') {
         return (
           <div style={{ padding: '10px 0' }}>
             <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
@@ -242,7 +263,7 @@ export default function Respond() {
           <div style={{ padding: '10px 0' }}>
             <CheckCircle size={56} color="#16a34a" style={{ margin: '0 auto 16px auto' }} />
             <h2 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '22px', fontWeight: 700 }}>You're on the list! 🌐</h2>
-            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Thanks! You've successfully joined the global spare registry as a <strong>{registryData?.instrument}</strong>.</p>
+            <p style={{ fontSize: '15px', color: '#475569', margin: 0, lineHeight: '1.5' }}>Thanks! You've successfully joined the Dep Register as a <strong>{registryData?.instrument}</strong>.</p>
           </div>
         );
       }
@@ -261,7 +282,7 @@ export default function Respond() {
         return (
           <>
             <p style={{ fontSize: '16px', color: '#334155', margin: '0 0 8px 0' }}>Hi <strong>{registryData.name}</strong>,</p>
-            <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.5', margin: '0 0 24px 0' }}>Your manager at <strong>{registryData.bands?.name || 'your band'}</strong> has invited you to join the regional spare registry.</p>
+            <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.5', margin: '0 0 24px 0' }}>Your manager at <strong>{registryData.bands?.name || 'your band'}</strong> has invited you to join the Online Dep Register.</p>
             <div style={{ textAlign: 'left', padding: '20px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a',  fontWeight: 700 }}>What does this mean?</h3>
               <p style={{ margin: 0, fontSize: '13.5px', color: '#475569', lineHeight: '1.6' }}>By clicking the button below, your name and instrument (<strong>{registryData.instrument}</strong>) will become safely discoverable to other local band managers when they are short of players for an upcoming gig. Your contact details remain completely private until you explicitly accept a booking request.</p>
