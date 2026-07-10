@@ -71,7 +71,6 @@ Deno.serve(async (req) => {
       const matrixLink = `https://brassbandwidth.netlify.app/band-view?uid=${player.band_id || bandId}`;
       const isSpareRecipient = player.status === 'Spare' || player.is_global_spare === true || (concertDetails && player.band_id !== concertDetails.band_id) || (!player.band_id);
 
-      // 🌟 THE FIX: Force the correct subject title even if it's missing!
       const safeSubject = (subject && subject.trim().length > 0) 
         ? subject 
         : (isSpareRecipient ? `Dep request - ${concertNameDisplay}` : `Availability Request - ${concertNameDisplay}`);
@@ -111,15 +110,32 @@ Deno.serve(async (req) => {
           <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #475569;">
       `;
 
+      // 1. Show the Matrix Link ONLY to Core Band Members
       if (!isSpareRecipient) {
         htmlBody += `<p>📊 <a href="${matrixLink}" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Click here to view the Live Band Availability Matrix</a></p>`;
-        const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?status=welcome&action=join-network&player_id=${player.id}&t=${Date.now()}`;
-        htmlBody += `<p style="font-size: 13px; color: #94a3b8; margin-top: 20px;">Want more playing opportunities outside the band? <br/>🌍 <a href="${globalNetworkLink}" style="color: #3b82f6; text-decoration: none; font-weight: 500;">Join the Online Network Spares</a></p>`;
       }
 
+      // 2. THE NEW BUTTON: Offer the Global Dep Register to ANY player who isn't on it yet!
+      if (!player.is_global_spare) {
+        const globalNetworkLink = `https://brassbandwidth.netlify.app/respond?token=${player.secure_token}`;
+        htmlBody += `
+          <div style="margin-top: 24px; padding-top: 24px; border-top: 1px dashed #cbd5e1; text-align: center;">
+            <h3 style="color: #0f172a; margin: 0 0 8px 0; font-size: 16px;">Want more playing opportunities? 🌐</h3>
+            <p style="color: #475569; font-size: 13px; margin: 0 0 16px 0; line-height: 1.5;">
+              Make your name and instrument safely discoverable to other band managers when they are short on players!
+            </p>
+            <a href="${globalNetworkLink}" 
+               style="display: inline-block; padding: 10px 20px; background-color: #0ea5e9; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">
+               Join the Dep Register
+            </a>
+          </div>
+        `;
+      }
+
+      // 3. The Footer (Scrubbed of the word "spare")
       htmlBody += `
-            <div style="margin-top: ${isSpareRecipient ? '0' : '24px'}; border-top: ${isSpareRecipient ? 'none' : '1px dashed #cbd5e1'}; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
-              <p style="margin: 0 0 6px 0;"><strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network spare or listed on a local band roster for BrassBandwidth.</p>
+            <div style="margin-top: 24px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+              <p style="margin: 0 0 6px 0;"><strong>Data Privacy Notice:</strong> You are receiving this invitation because you are registered as a network dep or listed on a local band roster for BrassBandwidth.</p>
               <p style="margin: 0;">Your contact data is processed strictly for coordinating performance bookings.</p>
             </div>
           </div>
