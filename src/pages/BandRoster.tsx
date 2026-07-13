@@ -1,248 +1,479 @@
-// @ts-nocheck
-
-import React, { useEffect, useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { useState, useEffect } from 'react';
+import { Users, Trash2, Loader2, Mail, GripVertical, Send, X, Edit, Search } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core'; 
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, UserPlus, ChevronDown, Clock, Search, Grid3X3, Info, ShieldAlert } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import type { Player, Concert, Availability, AvailabilityStatus } from '../lib/supabase';
 
-const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
-const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
-const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
-const TROMBONES = ["1st trombone", "2nd trombone", "bass trombone", "trombone", "trombones"];
-const BASSES = ["eeb bass", "bbb bass", "bass", "basses", "tuba", "tubas", "eb bass", "bb bass", "ee flat bass", "bb flat bass"];
-const PERCUSSION = ["percussion", "kit", "tuned", "timpani", "timps", "percussionist"];
+interface Player {
+  id: string;
+  name: string;
+  instrument: string;
+  email: string;
+  phone?: string;
+  status: string;
+  band_id: number;
+  sort_order?: number;
+  tags?: string[];
+}
 
-const MASTER_BRASS_BAND_ORDER = [
-  'Soprano Cornet', 'Principal Cornet', 'Solo Cornet', 'Repiano Cornet', '2nd Cornet', '3rd Cornet', 'Flugelhorn',
-  'Solo Horn', '1st Horn', '2nd Horn',
-  '1st Baritone', '2nd Baritone',
-  'Euphonium',
-  '1st Trombone', '2nd Trombone', 'Bass Trombone',
-  'Eb Bass', 'Bb Bass',
-  'Percussion'
+interface Concert {
+  id: string;
+  name: string;
+  concert_date: string;
+}
+
+const STANDARD_INSTRUMENTS = [
+  "Conductor", "Soprano Cornet", "Principal Cornet", "Solo Cornet", "Repiano Cornet",
+  "2nd Cornet", "3rd Cornet", "Flugelhorn", "Solo Horn", "1st Horn", "2nd Horn",
+  "1st Baritone", "2nd Baritone", "Euphonium", "1st Trombone", "2nd Trombone",
+  "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
-export function isInstrumentMatch(playerInst: string | undefined, targInst: string) {
-  if (!playerInst || !targInst) return false;
-  const p = playerInst.toLowerCase().trim();
-  const t = targInst.toLowerCase().trim();
-  if (p === t) return true;
-  if (CORNET_FLUGEL.includes(p) && CORNET_FLUGEL.includes(t)) return true;
-  if (HORNS.includes(p) && HORNS.includes(t)) return true;
-  if (BARI_EUPH.includes(p) && BARI_EUPH.includes(t)) return true;
-  if (TROMBONES.includes(p) && TROMBONES.includes(t)) return true;
-  if (BASSES.includes(p) && BASSES.includes(t)) return true;
-  if (PERCUSSION.includes(p) && PERCUSSION.includes(t)) return true;
-  return false;
-}
-
-type MatrixConcert = Concert & { latitude: number | null; longitude: number | null; };
-
-type AvailabilityCell = Availability & { 
-  player: Player; concert: MatrixConcert;
-  approached_spares?: Array<{ id: string; name: string; instrument: string; distance: number; band_name: string; type?: 'local' | 'global' }>;
-  current_approach_index?: number; approach_initiated_at?: string | null;
-  target_instrument?: string | null;
-  custom_message?: string | null;
-};
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 3958.8; 
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
-function getCellStyle(status: AvailabilityStatus) {
-  if (status === 'Available') return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
-  if (status === 'Not Available') return { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' };
-  if (status === 'Spare Assigned') return { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' }; 
-  
-  if ((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') {
-    return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' }; 
-  }
-  return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
-}
-
-function getTimeRemaining(initiatedAtStr: string | null | undefined): string {
-  if (!initiatedAtStr) return '24h 0m left';
-  const initiatedAt = new Date(initiatedAtStr).getTime();
-  const diff = (initiatedAt + 24 * 60 * 60 * 1000) - new Date().getTime();
-  if (diff <= 0) return 'Advancing...';
-  return `${Math.floor(diff / (1000 * 60 * 60))}h ${Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))}m left`;
-}
-
-function CellContent({ status, playerName, spareName, approachedList, currentIndex }: { status: AvailabilityStatus; playerName: string; spareName?: string; approachedList?: any[]; currentIndex?: number }) {
-  if (status === 'Available') return <span style={{ fontWeight: 600 }}>{playerName}</span>;
-  if (status === 'Not Available') return <span style={{ fontWeight: 700, fontSize: '15px' }}>✕</span>;
-  if (status === 'Spare Assigned') return <span style={{ fontWeight: 600 }}>{spareName || playerName || 'Covered by Dep'}</span>; 
-  if (((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') && approachedList && approachedList.length > 0) {
-    const activeIdx = currentIndex || 0;
-    const currentActivePlayer = approachedList[activeIdx] || approachedList[0];
-    return <span style={{ fontSize: '11px', display: 'block', lineHeight: '1.2', fontWeight: 700 }}>Asked: {currentActivePlayer.name} ({activeIdx + 1}/{approachedList.length})</span>;
-  }
-  return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '13px' }}>No Response</span>;
-}
-
-function PortalDropdown({ anchorRect, onClose, children }: { anchorRect: DOMRect; onClose: () => void; children: React.ReactNode; }) {
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function handleClick(e: MouseEvent) { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) onClose(); }
-    const id = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
-    return () => { clearTimeout(id); document.removeEventListener('mousedown', handleClick); };
-  }, [onClose]);
-  
-  const spaceBelow = window.innerHeight - anchorRect.bottom;
-  const showAbove = spaceBelow < 380; 
-  const topPos = showAbove ? anchorRect.top + window.scrollY - 4 : anchorRect.bottom + window.scrollY + 4;
-  const transform = showAbove ? 'translateY(-100%)' : 'none';
-  const left = (window.innerWidth - anchorRect.left) < 360 ? anchorRect.right - 360 : anchorRect.left;
-  
-  return createPortal(
-    <div ref={dropdownRef} style={{ position: 'absolute', top: topPos, left, transform, width: 360, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 9999, overflow: 'hidden', fontFamily: 'system-ui', display: 'flex', flexDirection: 'column' }}>
-      {children}
-    </div>, document.body
+function EmptyChairDropzone({ instrument }: { instrument: string }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `empty-${instrument}` });
+  return (
+    <div ref={setNodeRef} style={{ color: '#94a3b8', fontSize: '13px', display: 'flex', alignItems: 'center', fontWeight: 500, backgroundColor: isOver ? '#e0f2fe' : '#f8fafc', border: isOver ? '1px dashed #0284c7' : '1px dashed #e2e8f0', padding: '6px 12px', borderRadius: '6px', width: 'fit-content', fontStyle: 'italic', transition: 'all 0.2s', minHeight: '32px' }}>
+      Position Vacant
+    </div>
   );
 }
 
-function SortableRow({ player, concerts, allPlayers, globalSpares, activeDropdown, setActiveDropdown, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow, openCascadeCompose }: any) {
+function SortablePlayerRow({ player, onDelete, onEmailClick, onEditClick }: { player: Player, onDelete: (p: Player) => void, onEmailClick: (p: Player) => void, onEditClick: (p: Player) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.id });
-  
-  // 🌟 Mobile Fix: Ensure transform is explicitly undefined when not dragging so sticky isn't broken by matrix translations
-  const rowStyle = { 
-    transform: transform ? CSS.Transform.toString(transform) : undefined, 
-    transition, 
-    opacity: isDragging ? 0.4 : 1 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '4px 12px', 
+    backgroundColor: isDragging ? '#f8fafc' : '#ffffff',
+    border: isDragging ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+    borderRadius: '6px',
+    gap: '8px',
+    position: 'relative' as const,
+    zIndex: isDragging ? 50 : 1
   };
-  
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
-  const [shortlistSelection, setShortlistSelection] = useState<any[]>([]);
-
-  function handleCellClick(e: React.MouseEvent, cellId: string) {
-    if (activeDropdown === cellId) { setActiveDropdown(null); setAnchorRect(null); } 
-    else { setShortlistSelection([]); setAnchorRect((e.currentTarget as HTMLElement).getBoundingClientRect()); setActiveDropdown(cellId); }
-  }
 
   return (
-    <tr ref={setNodeRef} style={{ ...rowStyle, borderBottom: '1px solid #f1f5f9' }}>
-      {/* 🌟 Mobile Fix: Solid background and solid z-index */}
-      <td style={{ padding: '2px 6px', background: '#fff', width: '32px', position: 'sticky', left: 0, zIndex: 10 }}>
-        <span {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex' }}><GripVertical size={16} /></span>
-      </td>
-      {/* 🌟 Mobile Fix: Solid background, z-index, and solid 2px border */}
-      <td style={{ padding: '2px 6px', background: '#fff', fontWeight: 600, color: '#0f172a', position: 'sticky', left: '32px', zIndex: 10, minWidth: '140px', borderRight: '2px solid #cbd5e1' }}>{player.name}</td>
+    <div ref={setNodeRef} style={style}>
+      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex', padding: '2px' }}>
+        <GripVertical size={14} />
+      </div>
       
-      {concerts.map((concert: any) => {
-        const avail = getAvailability(player.id, concert.id);
-        const status: AvailabilityStatus = avail?.status || 'Not Responded';
-        const activeQueueIndex = avail?.current_approach_index || 0;
-        const cellId = `${player.id}-${concert.id}`;
-        const configColors = getCellStyle(status) || { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };        
-        const { localS: localSparesList, globalS: globalSparesList } = getAvailableSpares(player.instrument, concert);
-        const sparePlayer = avail?.spare_player_id ? [...allPlayers, ...globalSpares, ...(avail?.approached_spares || [])].find((p: any) => p.id === avail.spare_player_id) : undefined;
-        const totalSparesCount = localSparesList.length + globalSparesList.length;
+      <div style={{ flex: 1, fontWeight: 600, color: '#0f172a', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {player.name}
+          {player.tags && player.tags.filter(t => t.trim() !== '').map(tag => (
+            <span key={tag} style={{ fontSize: '10px', backgroundColor: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', border: '1px solid #e2e8f0', fontWeight: 500 }}>
+              {tag}
+            </span>
+          ))}
+        </div>
+        {player.status === 'Spare' && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>{player.instrument}</span>}
+      </div>
 
-        return (
-          <td key={concert.id} style={{ padding: '6px 8px', borderRight: '1px solid #f1f5f9', minWidth: '170px' }}>
-            <div onClick={(e) => handleCellClick(e, cellId)} style={{ padding: '2px 6px', minHeight: '44px', borderRadius: '6px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12.5px', backgroundColor: configColors.bg, color: configColors.text, border: `1px solid ${configColors.border}` }}>
-              <CellContent status={status} playerName={player.name} spareName={sparePlayer?.name} approachedList={avail?.approached_spares} currentIndex={activeQueueIndex} />
-              <ChevronDown size={14} style={{ opacity: 0.5 }} />
-            </div>
-            
-            {activeDropdown === cellId && anchorRect && (
-              <PortalDropdown anchorRect={anchorRect} onClose={() => setActiveDropdown(null)}>
-                <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-                  {((status as string) === 'Spares Contacted' || (status as string) === 'Deps Contacted') && avail?.approached_spares && avail.approached_spares.length > 0 && (
-                    <div style={{ padding: '12px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#166534', marginBottom: '8px' }}><Clock size={14} /> <span>ACTIVE EMAIL CASCADE</span></div>
-                      {avail.approached_spares.map((spare: any, idx: number) => (
-                        <div key={spare.id} style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between', color: idx < activeQueueIndex ? '#94a3b8' : '#1e293b', marginBottom: '4px' }}>
-                          <span style={{ textDecoration: idx < activeQueueIndex ? 'line-through' : 'none' }}>{idx+1}. {spare.name}</span>
-                          {idx === activeQueueIndex && <span style={{ fontWeight: 700, color: '#2563eb' }}>{getTimeRemaining(avail.approach_initiated_at)}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  <div style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Set Status</div>
-                  
-                  {/* Reconstructed Dropdown Actions */}
-                  <div 
-                    onClick={() => { onSetStatus(player.id, concert.id, 'Available'); setActiveDropdown(null); }}
-                    style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '13px', color: '#166534' }}
-                  >
-                    Mark as Available
-                  </div>
-                  <div 
-                    onClick={() => { onSetStatus(player.id, concert.id, 'Not Available'); setActiveDropdown(null); }}
-                    style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '13px', color: '#991b1b' }}
-                  >
-                    Mark as Not Available
-                  </div>
-                  <div 
-                    onClick={() => { onSetStatus(player.id, concert.id, 'Not Responded'); setActiveDropdown(null); }}
-                    style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '13px', color: '#64748b' }}
-                  >
-                    Reset Status
-                  </div>
+      <div style={{ width: '80px' }}>
+        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, backgroundColor: player.status === 'Active' ? '#dcfce7' : '#166534', color: player.status === 'Active' ? '#166534' : '#92400e', background: player.status === 'Spare' ? '#fef3c7' : undefined }}>
+          {player.status}
+        </span>
+      </div>
 
-                </div>
-              </PortalDropdown>
-            )}
-          </td>
-        );
-      })}
-    </tr>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button type="button" onClick={() => onEditClick(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', cursor: 'pointer' }}>
+          <Edit size={14} />
+        </button>
+        <button type="button" onClick={() => onEmailClick(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#eff6ff', color: '#3b82f6', border: 'none', cursor: 'pointer' }}>
+          <Mail size={14} />
+        </button>
+        <button type="button" onClick={() => onDelete(player)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '4px', backgroundColor: '#fef2f2', color: '#ef4444', border: 'none', cursor: 'pointer' }}>
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 
-// Ensure the main default export wrapper for the table is correctly built and closed!
-export default function AvailabilityMatrix({ players, concerts, allPlayers, globalSpares, getAvailability, onSetStatus, onAddPlayer, getAvailableSpares, renderDepRow, openCascadeCompose }: any) {
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+export default function BandRoster() {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [concerts, setConcerts] = useState<Concert[]>([]); 
+  const [bandId, setBandId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [hideEmpty, setHideEmpty] = useState(false);
+
+  const [name, setName] = useState('');
+  const [instrument, setInstrument] = useState('');
+  const [secondaryInstrumentsInput, setSecondaryInstrumentsInput] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [status, setStatus] = useState('Active');
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editPlayer, setEditPlayer] = useState<Player | null>(null);
+  const [editSecondaryInput, setEditSecondaryInput] = useState('');
+
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [activeEmailPlayer, setActiveEmailPlayer] = useState<Player | null>(null);
+  const [emailContext, setEmailContext] = useState('general');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  useEffect(() => { fetchIsolatedRoster(); }, []);
+
+  async function fetchIsolatedRoster() {
+    setLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+      const { data: band } = await supabase.from('bands').select('*').eq('manager_id', userData.user.id).maybeSingle();
+      if (!band) return setLoading(false);
+      setBandId(band.id);
+      
+      const [rosterData, concertsData] = await Promise.all([
+        supabase.from('players').select('*').eq('band_id', band.id).order('sort_order'),
+        supabase.from('concerts').select('id, name, concert_date').eq('band_id', band.id).eq('status', 'live').order('concert_date')
+      ]);
+      if (rosterData.data) setPlayers(rosterData.data as Player[]);
+      if (concertsData.data) setConcerts(concertsData.data as Concert[]);
+    } catch (err: any) { setError(err.message || "Failed to load roster configuration."); } finally { setLoading(false); }
+  }
+
+  async function handleAddPlayer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!bandId) return setError("No active band profile resolved.");
+    setSubmitting(true); setError(null); setSuccess(null);
+    
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanTags = secondaryInstrumentsInput.split(',').map(t => t.trim()).filter(t => t !== '');
+
+    try {
+      const sectionPlayers = players.filter(p => p.instrument === instrument);
+      const { data: newPlayer, error: insErr } = await supabase.from('players').insert({ name: name.trim(), instrument: instrument, email: cleanEmail, phone: phone.trim() || null, status, band_id: bandId, sort_order: sectionPlayers.length, tags: cleanTags }).select().single();
+      if (insErr) throw insErr;
+      setPlayers(prev => [...prev, newPlayer as Player]);
+      setSuccess(`${name.trim()} added successfully!`);
+      setName(''); setInstrument(''); setSecondaryInstrumentsInput(''); setEmail(''); setPhone(''); setStatus('Active');
+    } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
+  }
+
+  function openEditModal(player: Player) {
+    setEditPlayer({ ...player });
+    setEditSecondaryInput(player.tags ? player.tags.join(', ') : '');
+    setEditModalOpen(true);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editPlayer) return;
+    setSubmitting(true);
+    
+    const cleanTags = editSecondaryInput.split(',').map(t => t.trim()).filter(t => t !== '');
+
+    try {
+      const { error: upErr } = await supabase.from('players').update({ name: editPlayer.name.trim(), instrument: editPlayer.instrument, email: editPlayer.email.trim().toLowerCase(), phone: editPlayer.phone?.trim() || null, status: editPlayer.status, tags: cleanTags }).eq('id', editPlayer.id);
+      if (upErr) throw upErr;
+      setPlayers(prev => prev.map(p => p.id === editPlayer.id ? { ...editPlayer, tags: cleanTags } : p));
+      setSuccess("Profile updated.");
+      setEditModalOpen(false);
+    } catch (err: any) { setError(err.message); } finally { setSubmitting(false); }
+  }
+
+  async function handleDeletePlayer(player: Player) {
+    if (!bandId || !confirm(`Remove ${player.name}?`)) return;
+    try {
+      await supabase.from('players').delete().match({ id: player.id, band_id: bandId });
+      setPlayers(prev => prev.filter(p => p.id !== player.id));
+    } catch { setError("Security blocker active."); }
+  }
+
+  function openEmailModal(player: Player) {
+    setActiveEmailPlayer(player); setEmailContext('general'); setEmailMessage(''); setEmailModalOpen(true);
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activePlayer = players.find(p => p.id === active.id);
+    if (!activePlayer) return;
+
+    const overIdStr = String(over.id);
+
+    if (activePlayer.status === 'Spare') {
+      const overPlayer = players.find(p => p.id === over.id);
+      if (!overPlayer || overPlayer.status !== 'Spare') return;
+      const section = players.filter(p => p.status === 'Spare');
+      const oldIdx = section.findIndex(p => p.id === active.id);
+      const newIdx = section.findIndex(p => p.id === over.id);
+      const reordered = arrayMove(section, oldIdx, newIdx);
+      setPlayers(prev => [...prev.filter(p => p.status !== 'Spare'), ...reordered]);
+      await Promise.all(reordered.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
+      return;
+    }
+
+    let targetInstrument = '';
+    let targetIndex = -1;
+
+    if (overIdStr.startsWith('empty-')) {
+      targetInstrument = overIdStr.replace('empty-', '');
+      targetIndex = 0;
+    } else {
+      const overPlayer = players.find(p => p.id === over.id);
+      if (overPlayer && overPlayer.status !== 'Spare') {
+        targetInstrument = overPlayer.instrument;
+        const section = players.filter(p => p.instrument === targetInstrument && p.status === 'Active');
+        targetIndex = section.findIndex(p => p.id === over.id);
+      }
+    }
+
+    if (!targetInstrument) return;
+
+    let newPlayers = [...players];
+    const activeIdx = newPlayers.findIndex(p => p.id === activePlayer.id);
+
+    if (activePlayer.instrument === targetInstrument) {
+      const section = newPlayers.filter(p => p.instrument === targetInstrument && p.status === 'Active');
+      const oIdx = section.findIndex(p => p.id === active.id);
+      const nIdx = section.findIndex(p => p.id === over.id);
+      const reorderedSection = arrayMove(section, oIdx, nIdx);
+      setPlayers([...newPlayers.filter(p => !(p.instrument === targetInstrument && p.status === 'Active')), ...reorderedSection]);
+      await Promise.all(reorderedSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
+    } else {
+      const movingPlayer = { ...newPlayers[activeIdx], instrument: targetInstrument };
+      newPlayers.splice(activeIdx, 1);
+      
+      const targetSection = newPlayers.filter(p => p.instrument === targetInstrument && p.status === 'Active');
+      targetSection.splice(targetIndex === -1 ? targetSection.length : targetIndex, 0, movingPlayer);
+      
+      const oldSection = newPlayers.filter(p => p.instrument === activePlayer.instrument && p.status === 'Active');
+      
+      const unchangedPlayers = newPlayers.filter(p => 
+         !(p.instrument === targetInstrument && p.status === 'Active') && 
+         !(p.instrument === activePlayer.instrument && p.status === 'Active')
+      );
+      
+      setPlayers([...unchangedPlayers, ...oldSection, ...targetSection]);
+      
+      await supabase.from('players').update({ instrument: targetInstrument }).eq('id', movingPlayer.id);
+      await Promise.all(targetSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
+      await Promise.all(oldSection.map((p, i) => supabase.from('players').update({ sort_order: i }).eq('id', p.id)));
+    }
+  }
+
+  async function handleSendEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeEmailPlayer) return;
+    setSendingEmail(true);
+    const selectedConcert = concerts.find(c => c.id === emailContext);
+    const subjectLine = emailContext === 'general' ? `General Notice` : `Gig Notice: ${selectedConcert?.name}`;
+    try {
+      await supabase.functions.invoke('send-custom-email', { body: { to: activeEmailPlayer.email, subject: subjectLine, msg: emailMessage } });
+      setToast('Message dispatched.');
+    } catch { setError('Email routing error.'); } finally { setSendingEmail(false); setEmailModalOpen(false); }
+  }
+
+  const activePlayers = players.filter(p => p.status === 'Active');
+  const sparePlayers = players.filter(p => p.status === 'Spare');
+  
+  const filteredInstruments = STANDARD_INSTRUMENTS.filter(inst => {
+    const seatPlayers = activePlayers.filter(p => p.instrument === inst);
+    if (hideEmpty && seatPlayers.length === 0) return false;
+    if (searchQuery.trim() !== '') {
+      return inst.toLowerCase().includes(searchQuery.toLowerCase()) || seatPlayers.some(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return true;
+  });
+
+const visibleSpares = searchQuery.trim() !== '' 
+    ? sparePlayers.filter(p => 
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        p.instrument.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.tags && p.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())))
+      )
+    : sparePlayers;
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', fontFamily: 'system-ui', color: '#64748b' }}><Loader2 className="animate-spin" /> Loading Roster Dashboard...</div>;
 
   return (
-    <DndContext sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))} collisionDetection={closestCenter}>
-      {/* 🌟 Mobile Fix: The wrapper allowing sideways scroll */}
-      <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
-          <thead>
-            <tr>
-              <th style={{ position: 'sticky', left: 0, zIndex: 20, backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', padding: '12px 6px' }}></th>
-              <th style={{ position: 'sticky', left: '32px', zIndex: 20, backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', borderRight: '2px solid #cbd5e1', padding: '12px 6px', color: '#475569', fontSize: '13px' }}>Player</th>
-              {concerts.map((c: any) => (
-                <th key={c.id} style={{ padding: '12px 8px', borderBottom: '2px solid #e2e8f0', color: '#475569', fontSize: '13px', minWidth: '170px' }}>{c.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <SortableContext items={players.map((p: any) => p.id)} strategy={verticalListSortingStrategy}>
-              {players.map((player: any) => (
-                <SortableRow 
-                  key={player.id} 
-                  player={player} 
-                  concerts={concerts} 
-                  allPlayers={allPlayers} 
-                  globalSpares={globalSpares} 
-                  activeDropdown={activeDropdown} 
-                  setActiveDropdown={setActiveDropdown} 
-                  getAvailability={getAvailability} 
-                  onSetStatus={onSetStatus} 
-                  onAddPlayer={onAddPlayer} 
-                  getAvailableSpares={getAvailableSpares} 
-                  renderDepRow={renderDepRow} 
-                  openCascadeCompose={openCascadeCompose} 
-                />
-              ))}
-            </SortableContext>
-          </tbody>
-        </table>
+    <div style={{ padding: '24px', fontFamily: 'system-ui, sans-serif', maxWidth: '1400px', margin: '0 auto', boxSizing: 'border-box' }}>
+      
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <Users size={28} color="#1e3a5f" />
+        <div><h1 style={{ fontSize: '24px', fontWeight: 800, color: '#1e3a5f', margin: 0 }}>Band Roster</h1></div>
       </div>
-    </DndContext>
+
+      {error && <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>{error}</div>}
+      {success && <div style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>{success}</div>}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div style={{ flex: '1 1 600px', minWidth: '300px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#fff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input type="text" placeholder="Search roster..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ width: '100%', padding: '6px 10px 6px 32px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                <input type="checkbox" checked={hideEmpty} onChange={e => setHideEmpty(e.target.checked)} style={{ width: '14px', height: '14px' }} /> Hide Empty Chairs
+              </label>
+            </div>
+
+            <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 16px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#0f172a' }}>Current Instrumentation Grid</h2>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {filteredInstruments.map(inst => {
+                  const seatPlayers = activePlayers.filter(p => p.instrument === inst);
+                  const visiblePlayers = searchQuery.trim() !== '' ? seatPlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) : seatPlayers;
+                  return (
+                    <div key={inst} style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #f1f5f9', minHeight: '38px' }}>
+                      <div style={{ width: '180px', padding: '8px 14px', backgroundColor: '#f8fafc', fontWeight: 600, color: '#475569', fontSize: '13px', borderRight: '1px solid #e2e8f0', flexShrink: 0 }}>{inst}</div>
+                      <div style={{ flex: '1 1 300px', padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#ffffff' }}>
+                        <SortableContext id={`context-${inst}`} items={visiblePlayers.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                          {visiblePlayers.length > 0 ? visiblePlayers.map(p => (
+                            <SortablePlayerRow key={p.id} player={p} onDelete={handleDeletePlayer} onEmailClick={openEmailModal} onEditClick={openEditModal} />
+                          )) : <EmptyChairDropzone instrument={inst} />}
+                        </SortableContext>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {visibleSpares.length > 0 && (
+              <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ padding: '10px 16px', backgroundColor: '#1e3a5f', borderBottom: '1px solid #e2e8f0' }}><h2 style={{ fontSize: '14px', margin: 0, color: '#ffffff', fontWeight: 700 }}>Local Band Spares / Dep List</h2></div>
+                <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: '#ffffff' }}>
+                  <SortableContext id="context-spares" items={visibleSpares.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                    {visibleSpares.map(p => (
+                      <SortablePlayerRow key={p.id} player={p} onDelete={handleDeletePlayer} onEmailClick={openEmailModal} onEditClick={openEditModal} />
+                    ))}
+                  </SortableContext>
+                </div>
+              </div>
+            )}
+          </div>
+        </DndContext>
+
+        <div style={{ flex: '1 1 300px', minWidth: '260px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', position: 'sticky', top: '24px' }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', margin: '0 0 12px 0' }}>Add Musician</h2>
+          <form onSubmit={handleAddPlayer} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
+            <select required value={instrument} onChange={e => setInstrument(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px', outline: 'none' }}>
+              <option value="">Primary instrument...</option>
+              {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
+            </select>
+            <input type="text" value={secondaryInstrumentsInput} onChange={e => setSecondaryInstrumentsInput(e.target.value)} placeholder="Secondary Instruments (e.g. Solo Horn, 1st Horn)" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
+            <select required value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '13px' }}>
+              <option value="Active">Active Core Player</option>
+              <option value="Spare">Local Spare / Dep</option>
+            </select>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone (Optional)" style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+            <button type="submit" disabled={submitting} style={{ padding: '10px', backgroundColor: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>{submitting ? 'Saving...' : 'Add Player'}</button>
+          </form>
+        </div>
+      </div>
+
+      {editModalOpen && editPlayer && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ background: '#ffffff', width: '400px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Edit Player Profile</h3>
+              <button type="button" onClick={() => setEditModalOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleEditSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Name</label>
+                <input type="text" required value={editPlayer.name} onChange={e => setEditPlayer({...editPlayer, name: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Primary Instrument</label>
+                <select required value={editPlayer.instrument} onChange={e => setEditPlayer({...editPlayer, instrument: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
+                  {STANDARD_INSTRUMENTS.map(inst => <option key={inst} value={inst}>{inst}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Secondary Instruments / Tags</label>
+                <input type="text" value={editSecondaryInput} onChange={e => setEditSecondaryInput(e.target.value)} placeholder="e.g. Solo Horn, 2nd Cornet" style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Status</label>
+                <select required value={editPlayer.status} onChange={e => setEditPlayer({...editPlayer, status: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
+                  <option value="Active">Active Core Player</option>
+                  <option value="Spare">Local Spare / Dep</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Email</label>
+                  <input type="email" required value={editPlayer.email} onChange={e => setEditPlayer({...editPlayer, email: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Phone</label>
+                  <input type="tel" value={editPlayer.phone || ''} onChange={e => setEditPlayer({...editPlayer, phone: e.target.value})} style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
+                <button type="submit" disabled={submitting} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {emailModalOpen && activeEmailPlayer && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }}>
+          <div style={{ background: '#ffffff', width: '460px', maxWidth: '90vw', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Message {activeEmailPlayer.name}</h3>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Direct dispatch to ({activeEmailPlayer.email})</span>
+              </div>
+              <button type="button" onClick={() => setEmailModalOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSendEmail} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Email Topic / Reference</label>
+                <select value={emailContext} onChange={e => setEmailContext(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', fontSize: '14px' }}>
+                  <option value="general">General Message (No gig reference)</option>
+                  {concerts.map(concert => (
+                    <option key={concert.id} value={concert.id}>Regarding Gig: {concert.name} ({new Date(concert.concert_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Message Content</label>
+                <textarea required rows={5} value={emailMessage} onChange={e => setEmailMessage(e.target.value)} placeholder="Type your notice description here..." style={{ padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEmailModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
+                <button type="submit" disabled={sendingEmail} style={{ padding: '8px 16px', background: '#1e3a5f', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><Send size={14} /> {sendingEmail ? 'Dispatching...' : 'Send Message'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {toast && <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#0f172a', color: '#fff', padding: '12px 24px', borderRadius: '8px', zIndex: 10000, fontWeight: 500 }}>{toast}</div>}
+    </div>
   );
 }
