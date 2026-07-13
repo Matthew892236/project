@@ -326,7 +326,7 @@ async function handleRegistryOptIn() {
           <div className="login-logo" style={{ display: 'inline-flex', background: '#e0f2fe', padding: '16px', borderRadius: '50%', color: '#0ea5e9', marginBottom: '16px' }}><Music size={32} /></div>
           <h1 style={{ margin: '0 0 8px 0', color: '#0f172a', fontSize: '24px', fontWeight: 800 }}>Brassbandwidth</h1>
           <p style={{ margin: 0, color: '#64748b', fontSize: '14px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '1px' }}>
-            {mode === 'registry' ? 'Global Player Registry' : 'Availability Response'}
+            {mode === 'registry' ? 'Dep Registry' : 'Availability Response'}
           </p>
         </div>
 
