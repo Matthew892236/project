@@ -211,7 +211,7 @@ export default function Respond() {
                 <p style={{ margin: 0, fontSize: '13px', color: '#555', lineHeight: '1.4' }}>By clicking the button below, your name and instrument (<strong>{registryData.instrument}</strong>) will become safely discoverable to other local band managers when they are short of players for an upcoming gig. Your contact details remain completely private until you explicitly accept a booking request.</p>
               </div>
               <div className="respond-actions" style={{ marginTop: '24px' }}>
-                <button className="btn respond-btn-available" style={{ width: '100%', justifyContent: 'center' }} onClick={handleRegistryOptIn}><CheckCircle size={20} /> Opt Into Global Registry</button>
+                <button className="btn respond-btn-available" style={{ width: '100%', justifyContent: 'center' }} onClick={handleRegistryOptIn}><CheckCircle size={20} /> Opt Into Dep Registry</button>
               </div>
             </>
           ) : mode === 'concert' && tokenData ? (

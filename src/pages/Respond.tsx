@@ -288,7 +288,7 @@ async function handleRegistryOptIn() {
               <p style={{ margin: 0, fontSize: '13.5px', color: '#475569', lineHeight: '1.6' }}>By clicking the button below, your name and instrument (<strong>{registryData.instrument}</strong>) will become safely discoverable to other local band managers when they are short of players for an upcoming gig. Your contact details remain completely private until you explicitly accept a booking request.</p>
             </div>
             <div style={{ marginTop: '24px' }}>
-              <button style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', background: '#16a34a', color: '#fff', fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }} onClick={handleRegistryOptIn}><CheckCircle size={20} /> Opt Into Global Registry</button>
+              <button style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', background: '#16a34a', color: '#fff', fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }} onClick={handleRegistryOptIn}><CheckCircle size={20} /> Opt Into Dep Registry</button>
             </div>
           </>
         );
