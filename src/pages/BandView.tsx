@@ -10,7 +10,6 @@ const STANDARD_INSTRUMENTS = [
   "Bass Trombone", "EEb Bass", "BBb Bass", "Percussion"
 ];
 
-// 🌟 FIX: Use the identical matcher here to ensure Vacant Rows catch slightly differently named spares!
 const CORNET_FLUGEL = ["principal cornet", "solo cornet", "soprano cornet", "repiano cornet", "2nd cornet", "3rd cornet", "flugelhorn", "cornet", "cornets", "flugel", "soprano"];
 const HORNS = ["solo horn", "1st horn", "2nd horn", "horn", "horns", "tenor horn", "tenor horns"];
 const BARI_EUPH = ["1st baritone", "2nd baritone", "euphonium", "baritone", "baritones", "euph", "euphs", "euphoniums"];
@@ -47,18 +46,17 @@ function statusText(avail: any, allPlayers: Player[]) {
   if (status === 'Available') return { label: 'Available', color: '#166534' };
   if (status === 'Not Available') return { label: '✕ Not Available', color: '#991b1b' };
   
-if (status === 'Spare Assigned') {
-    // 🌟 FIX: Check local players, but fallback to the JSON cache so global spare names don't disappear!
+  if (status === 'Spare Assigned') {
+    // Attempt to pull the Dep name from the local player list, or fallback to the JSON cache on the cell
     const spare = allPlayers.find(p => p.id === avail.spare_player_id) || (avail.approached_spares || []).find((s:any) => s.id === avail.spare_player_id);
     return { label: spare ? spare.name : 'Dep Assigned', color: '#1e40af' };
   }
   
-if (status === 'Deps Contacted' || status === 'Spares Contacted') {
+  if (status === 'Deps Contacted' || status === 'Spares Contacted') {
     const list = avail.approached_spares || [];
     const idx = avail.current_approach_index || 0;
     const activePlayer = list[idx] || list[0];
     return { 
-      // 🌟 FIX: Renders the full name safely so it doesn't blank out the matrix
       label: activePlayer ? `Asked: ${activePlayer.name} (${idx + 1}/${list.length})` : 'Asked Dep...', 
       color: '#92400e' 
     };
@@ -92,8 +90,9 @@ export default function BandView() {
       const [concertsRes, playersRes, availabilityRes] = await Promise.all([
         supabase.from('concerts').select('*').eq('band_id', bandData.id).eq('status', 'live').gte('concert_date', new Date().toISOString().split('T')[0]).order('concert_date'),
         supabase.from('players').select('*').eq('band_id', bandData.id).order('sort_order'),
-// 🌟 FIX: Added target_instrument to the select string!
-        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index, target_instrument')      ]);
+        // Explicitly asking DB for approached_spares cache so the matrix can extract the names of Spares!
+        supabase.from('availability').select('player_id, concert_id, status, spare_player_id, approached_spares, current_approach_index, target_instrument')      
+      ]);
 
       setConcerts((concertsRes.data as MatrixConcert[]) || []);
       setPlayers(playersRes.data || []);
@@ -112,7 +111,6 @@ export default function BandView() {
 
   const activePlayers = players.filter((p) => p.status === 'Active');
   
-  // 🌟 FIX: Only render columns based on ACTIVE players to stop Spares creating phantom rows
   const existingInstruments = Array.from(new Set(activePlayers.map(p => p.instrument)));
   const displayInstruments = Array.from(new Set([...STANDARD_INSTRUMENTS, ...existingInstruments]));
 
@@ -198,12 +196,12 @@ export default function BandView() {
                                 Position Vacant
                               </td>
                               {concerts.map((c) => {
-const vacantAvail = availability.find(a => 
-  a.concert_id === c.id && 
-  (a.status === 'Available' || a.status === 'Deps Contacted' || a.status === 'Spares Contacted' || a.status === 'Spare Assigned') &&
-  !activePlayers.some(p => p.id === a.player_id) && 
-  (a.target_instrument === instrument || (!a.target_instrument && isInstrumentMatch(a.player?.instrument, instrument)))
-);
+                                const vacantAvail = availability.find(a => 
+                                  a.concert_id === c.id && 
+                                  (a.status === 'Available' || a.status === 'Deps Contacted' || a.status === 'Spares Contacted' || a.status === 'Spare Assigned') &&
+                                  !activePlayers.some(p => p.id === a.player_id) && 
+                                  (a.target_instrument === instrument || (!a.target_instrument && isInstrumentMatch(a.player?.instrument, instrument)))
+                                );
 
                                 let label = '—';
                                 let color = '#9ca3af';
